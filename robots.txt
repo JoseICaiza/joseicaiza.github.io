@@ -1,4 +1,4 @@
 User-agent: *
 Disallow:
 
-Sitemap: https://josecaiza.github.io/sitemap.xml
+Sitemap: https://joseicaiza.github.io/sitemap.xml

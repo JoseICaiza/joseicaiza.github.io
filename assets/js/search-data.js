@@ -448,8 +448,11 @@ ninja.data = [{
           description: "",
           section: "News",handler: () => {
               window.location.href = "/news/announcement_2/";
-            },},{id: "news-a-simple-inline-announcement-with-markdown-emoji-sparkles-smile",
-          title: 'A simple inline announcement with Markdown emoji! :sparkles: :smile:',
+            },},{id: "news-made-a-website-with-github-sparkles-smile",
+          title: 'Made a website with GitHub ! :sparkles: :smile:',
+          description: "",
+          section: "News",},{id: "news-our-paper-disruptions-in-multi-period-stochastic-inventory-control-for-decentralized-serial-networks-has-been-published-in-the-ieee-transactions-on-control-of-network-systems",
+          title: 'Our paper Disruptions in Multi-Period Stochastic Inventory Control for Decentralized Serial Networks has...',
           description: "",
           section: "News",},{id: "projects-project-1",
           title: 'project 1',

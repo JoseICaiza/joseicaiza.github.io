@@ -23,12 +23,12 @@ announcements:
   limit: 5 # leave blank to include all the news in the `_news` folder
 
 latest_posts:
-  enabled: true
+  enabled: false
   scrollable: true # adds a vertical scroll bar if there are more than 3 new posts items
   limit: 3 # leave blank to include all the blog posts
 ---
 
-I am a third-year PhD student in the Elmore Family School of Electrical and Computer Engineering at Purdue University, co-advised by [Prof. Philip E. Paré](https://sites.google.com/view/philpare) and [Prof. Junjie Qin](https://engineering.purdue.edu/people/junjie.qin.1). I received a MSc in Electrical and Computer Engineering from Purdue University and a BSc in Electrical Engineering from Escuela Superior Politécnica del Litoral in Guayaquil, Ecuador.
+I am a PhD candidate in the Elmore Family School of Electrical and Computer Engineering at Purdue University, co-advised by [Prof. Philip E. Paré](https://sites.google.com/view/philpare) and [Prof. Junjie Qin](https://engineering.purdue.edu/people/junjie.qin.1). I received a MSc in Electrical and Computer Engineering from Purdue University and a BSc in Electrical Engineering from Escuela Superior Politécnica del Litoral in Guayaquil, Ecuador.
 
 My research focuses on the distributed optimization of networked dynamical systems under uncertainty, with applications in supply chains, power systems and epidemic processes. 
 

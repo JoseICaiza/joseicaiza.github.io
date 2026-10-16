@@ -1,0 +1,1259 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Bode Reconstruction Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrument-panel workbench — plots on the left like a scope screen, the reasoning notebook on the right. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --surface-2:#f6f8fa; --fg:#18212b; --muted:#5b6876; --line:#d5dbe2;
+  --grid:#e3e8ee; --grid-major:#c9d1da;
+  --measured:#9aa8b6; --recon:#1d5fd1; --asym:#18212b; --block:#d9730d; --mark:#c62f3a; --good:#1f8a4c; --bad:#c62f3a;
+  --accent:#1d5fd1; --accent-soft:#e3ecfb;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a; --surface:#161d25; --surface-2:#1b232d; --fg:#e4e9ef; --muted:#93a1b0; --line:#2a3440;
+  --grid:#1f2832; --grid-major:#2f3a47;
+  --measured:#5c6b7a; --recon:#6aa3ff; --asym:#e4e9ef; --block:#f2a04a; --mark:#ff6b75; --good:#4cc283; --bad:#ff6b75;
+  --accent:#6aa3ff; --accent-soft:#1c2b45; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#161d25; --surface-2:#1b232d; --fg:#e4e9ef; --muted:#93a1b0; --line:#2a3440;
+  --grid:#1f2832; --grid-major:#2f3a47;
+  --measured:#5c6b7a; --recon:#6aa3ff; --asym:#e4e9ef; --block:#f2a04a; --mark:#ff6b75; --good:#4cc283; --bad:#ff6b75;
+  --accent:#6aa3ff; --accent-soft:#1c2b45; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:700;font-size:30px;line-height:1.1;margin:0;letter-spacing:.2px;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;max-width:62ch}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{font-family:var(--f-display);font-weight:600;font-size:15px;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+  padding:8px 14px;border-radius:6px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.menu{display:flex;flex-direction:column;gap:14px}
+.menubar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters button{font:600 13.5px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:6px 14px;cursor:pointer}
+.filters button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.progress{color:var(--muted);font-size:14px}.progress b{color:var(--fg);font-family:var(--f-mono)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.card{display:flex;flex-direction:column;gap:8px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:12px;cursor:pointer;font:inherit}
+.card:hover{border-color:var(--accent)}
+.ctop{display:flex;justify-content:space-between;align-items:center}
+.cnum{font-family:var(--f-display);font-weight:700;font-size:26px;line-height:1}
+.thumb{width:100%;height:64px;background:var(--surface-2);border-radius:6px}
+.cfoot{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.cblocks{margin-left:auto;font-family:var(--f-mono);font-size:11.5px}
+.sdot{width:9px;height:9px;border-radius:50%;background:var(--line);flex:0 0 auto}
+.sdot.prog{background:var(--block)} .sdot.built{background:var(--accent)} .sdot.solved{background:var(--good)}
+.dchip{font:600 11.5px var(--f-body);letter-spacing:.04em;padding:3px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.dchip[data-d="Warm-up"]{color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,var(--line))}
+.dchip[data-d="Intermediate"]{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.dchip[data-d="Challenging"]{color:var(--block);border-color:color-mix(in srgb,var(--block) 45%,var(--line))}
+#work{display:flex;flex-direction:column;gap:16px}
+#work[hidden],#menu[hidden]{display:none}
+.workbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.wtitle{display:flex;align-items:center;gap:10px;font-family:var(--f-display);font-weight:700;font-size:22px}
+.wnav{display:flex;gap:6px}
+.stepper{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.chip{flex:0 0 auto;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--muted);
+  border-radius:999px;padding:5px 12px 5px 6px;font-size:13px;cursor:pointer;font-family:var(--f-body)}
+.chip .n{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--surface-2);font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.chip.done{color:var(--fg)} .chip.done .n{background:var(--accent-soft);color:var(--accent)}
+.chip.cur{border-color:var(--accent);color:var(--fg);box-shadow:0 0 0 1px var(--accent) inset}
+.chip.cur .n{background:var(--accent);color:var(--surface)}
+
+.main{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:900px){.main{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.plots{padding:12px 12px 8px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.plotbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;padding:0 4px 6px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted)}
+.legend label{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.legend input{margin:0;accent-color:var(--accent)}
+.sw{display:inline-block;width:22px;height:0;border-top:3px solid}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--muted);font:500 12.5px var(--f-body);padding:5px 10px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.ptitle{font-family:var(--f-display);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:4px 4px 0}
+svg.chart{display:block;width:100%;touch-action:none}
+svg text{font-family:var(--f-mono);font-size:11px;fill:var(--muted)}
+.readout{font-family:var(--f-mono);font-size:12px;color:var(--muted);min-height:1.5em;padding:2px 4px;font-variant-numeric:tabular-nums}
+.readout b{color:var(--fg);font-weight:500}
+
+.notes{padding:16px 18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.eyebrow{font-family:var(--f-display);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent)}
+.notes h2{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.2;margin:2px 0 0;text-wrap:balance}
+.notes p{margin:0}
+.box{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px}
+.box .lbl{font-size:11.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.box.answer{border-color:var(--block);background:color-mix(in srgb,var(--block) 8%,var(--surface))}
+.box.answer .lbl{color:var(--block)}
+.mono{font-family:var(--f-mono);font-size:13.5px}
+.btn{font:600 14px var(--f-body);border-radius:6px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn:disabled{opacity:.45;cursor:default}
+.nav{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.sl{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;font-size:13.5px}
+.sl input[type=range]{width:100%;accent-color:var(--block)}
+.sl output{font-family:var(--f-mono);font-size:13px;min-width:5.5ch;text-align:right;font-variant-numeric:tabular-nums}
+.link{background:none;border:0;padding:0;color:var(--accent);font:500 13px var(--f-body);cursor:pointer;text-decoration:underline;align-self:flex-start}
+
+.frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;margin:0 2px}
+.frac>span{padding:0 4px;white-space:nowrap}
+.frac>span:first-child{border-bottom:1.3px solid currentColor}
+.eq{font-family:var(--f-mono);font-size:14px;overflow-x:auto;padding:4px 0;white-space:nowrap}
+.tf{display:flex;flex-direction:column;gap:6px}
+.status{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+
+.choices{display:flex;flex-direction:column;gap:6px}
+.choice{display:flex;align-items:center;gap:10px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+  border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit;overflow-x:auto}
+.choice .L{font-family:var(--f-display);font-weight:700;width:1.4em;flex:0 0 auto}
+.choice.right{border-color:var(--good);background:color-mix(in srgb,var(--good) 10%,var(--surface))}
+.choice.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--surface))}
+.palette{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(130px,45%),1fr));gap:6px}
+.pblock{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--fg);
+  border-radius:8px;padding:8px 10px;cursor:pointer;font:inherit;min-width:0}
+.pblock:hover{border-color:var(--block)}
+.pblock[aria-pressed="true"]{border-color:var(--block);box-shadow:0 0 0 1px var(--block) inset;background:color-mix(in srgb,var(--block) 8%,var(--surface))}
+.pname{font-weight:600;font-size:13px}
+.psym{font-family:var(--f-mono);font-size:12px;color:var(--muted);overflow-x:auto;max-width:100%;white-space:nowrap}
+.sl{grid-template-columns:auto 1fr 5.5em}
+.num{width:100%;font:13px var(--f-mono);padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--fg);font-variant-numeric:tabular-nums}
+.sl.nos{grid-template-columns:auto 8em;justify-content:start}
+.seg.small button{padding:4px 12px;font-size:13px}
+.seg.small{justify-self:start}
+.fb{border-radius:8px;padding:10px 12px;font-size:14px;border:1px solid}
+.fb.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--surface))}
+.fb.warn{border-color:var(--block);background:color-mix(in srgb,var(--block) 10%,var(--surface))}
+.fb.good{border-color:var(--good);background:color-mix(in srgb,var(--good) 10%,var(--surface))}
+.zcalc{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
+.zhead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;font-weight:600;font-size:13.5px}
+.zstar{font-size:13.5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.zstar .num{width:7em}
+.tablewrap{overflow-x:auto}
+.ztab{width:100%;border-collapse:collapse;font-size:13px}
+.ztab th{text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;padding:4px 6px;border-bottom:1px solid var(--line)}
+.ztab td{padding:5px 6px;border-bottom:1px solid var(--grid);vertical-align:middle}
+.ztab td:nth-child(2){width:6.5em}
+.ztab .hint{font-size:11.5px}
+.ztab tr.tot td{font-weight:600;border-bottom:0;border-top:1.5px solid var(--fg)}
+.ok{width:1.4em;font-weight:700;text-align:center}
+.ok.y{color:var(--good)} .ok.n{color:var(--bad)}
+.zres{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;font-size:14px}
+.btn.small{padding:6px 10px;font-size:13px}
+.formula{font-family:var(--f-mono);font-size:13px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;overflow-x:auto}
+.why{font-size:13.5px;padding:2px 2px 0}
+.why.good{color:var(--good)} .why.bad{color:var(--bad)}
+.hint{font-size:12.5px;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.chip,.choice,.btn{transition:background .15s,border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Bode Reconstruction Lab</h1>
+      <p class="sub">Twenty measured Bode plots to reverse-engineer. Pick a problem, then rebuild its transfer function one block at a time: choose a block, tune it until your reconstruction lies on the measured curve, and check it. Help unlocks step by step only after wrong tries.</p>
+    </div>
+  </header>
+
+  <section id="menu" class="menu" aria-label="All problems">
+    <div class="menubar">
+      <div class="filters" role="group" aria-label="Filter by difficulty" id="filters"></div>
+      <div class="progress" id="progress"></div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section id="work" hidden>
+  <div class="workbar">
+    <button class="btn" id="toMenu">← All problems</button>
+    <div class="wtitle"><span id="wname"></span><span class="dchip" id="wdiff"></span></div>
+    <div class="wnav"><button class="btn" id="prevP" aria-label="Previous problem">‹ Prev</button><button class="btn" id="nextP2" aria-label="Next problem">Next ›</button></div>
+  </div>
+
+  <nav class="stepper" id="stepper" aria-label="Steps"></nav>
+
+  <div class="main">
+    <section class="panel plots">
+      <div class="plotbar">
+        <div class="legend" id="legend">
+          <label><span class="sw" style="border-color:var(--measured);border-top-width:5px"></span>Measured</label>
+          <label><input type="checkbox" id="tRecon" checked><span class="sw" style="border-color:var(--recon)"></span>Your reconstruction</label>
+          <label><input type="checkbox" id="tAsym" checked><span class="sw" style="border-color:var(--asym);border-top-style:dashed;border-top-width:2px"></span>Asymptotes</label>
+          <label><input type="checkbox" id="tBlock" checked><span class="sw" style="border-color:var(--block);border-top-width:2px"></span>Current block alone</label>
+        </div>
+        <div class="seg" role="group" aria-label="View">
+          <button id="vPlot" aria-pressed="true">Bode plot</button>
+          <button id="vRes" aria-pressed="false">What's left</button>
+        </div>
+      </div>
+      <div class="ptitle" id="magTitle">Magnitude  |G(jω)|  [dB]</div>
+      <svg class="chart" id="cMag" height="270" role="img" aria-label="Magnitude plot"></svg>
+      <div class="ptitle" id="phTitle">Phase  ∠G(jω)  [deg]</div>
+      <svg class="chart" id="cPh" height="230" role="img" aria-label="Phase plot"></svg>
+      <div class="readout" id="readout">Hover or drag across a plot to read values.</div>
+    </section>
+
+    <aside class="panel notes" id="notes" aria-live="polite"></aside>
+  </div>
+  </section>
+</div>
+
+<script>
+// ---------- math blocks ----------
+const LG = Math.log10, D2R = 180 / Math.PI;
+function evalBlock(b, w) {
+  switch (b.type) {
+    case 'gain': { const m = 20 * LG(Math.abs(b.K)), q = b.K < 0 ? -180 : 0; return [m, q, m, q]; }
+    case 'pow':  { const m = 20 * b.p * LG(w); return [m, 90 * b.p, m, 90 * b.p]; }
+    case 'real': {
+      const r = w / b.w0, n = b.n || 1, s = b.sign * n, q = (b.rhp ? -b.sign : b.sign) * n;
+      return [s * 10 * LG(1 + r * r), q * Math.atan(r) * D2R,
+              s * 20 * Math.max(0, LG(r)), q * 45 * Math.min(2, Math.max(0, LG(r) + 1))];
+    }
+    case 'cplx': {
+      const r = w / b.wn, s = b.sign, re = 1 - r * r, im = 2 * b.z * r;
+      return [s * 10 * LG(re * re + im * im), s * Math.atan2(im, re) * D2R,
+              s * 40 * Math.max(0, LG(r)), s * (r >= 1 ? 180 : 0)];
+    }
+  }
+}
+function response(blocks, ws) {
+  const n = ws.length, out = { m: new Float64Array(n), p: new Float64Array(n), am: new Float64Array(n), ap: new Float64Array(n) };
+  for (const b of blocks) for (let i = 0; i < n; i++) {
+    const r = evalBlock(b, ws[i]); out.m[i] += r[0]; out.p[i] += r[1]; out.am[i] += r[2]; out.ap[i] += r[3];
+  }
+  return out;
+}
+const fmt = x => { if (x === 0) return '0'; const a = Math.abs(x); return a >= 1000 ? String(Math.round(x)) : String(+x.toPrecision(3)); };
+const frac = (n, d) => `<span class="frac"><span>${n}</span><span>${d}</span></span>`;
+
+function factor(b) {          // returns {num|den: html}
+  switch (b.type) {
+    case 'gain': return { k: fmt(b.K).replace('-', '−') };
+    case 'pow': return b.p > 0 ? { num: b.p === 1 ? 's' : `s<sup>${b.p}</sup>` } : { den: b.p === -1 ? 's' : `s<sup>${-b.p}</sup>` };
+    case 'real': { const f = (b.rhp ? `(1 − s/${fmt(b.w0)})` : `(s/${fmt(b.w0)} + 1)`) + (b.n > 1 ? `<sup>${b.n}</sup>` : ''); return b.sign > 0 ? { num: f } : { den: f }; }
+    case 'cplx': { const f = `((s/${fmt(b.wn)})<sup>2</sup> + ${fmt(2 * b.z)}(s/${fmt(b.wn)}) + 1)`; return b.sign > 0 ? { num: f } : { den: f }; }
+  }
+}
+function bodeForm(blocks) {
+  if (!blocks.length) return '<span class="hint">no blocks yet</span>';
+  let k = '', num = [], den = [];
+  for (const b of blocks) { const f = factor(b); if (f.k) k = f.k; if (f.num) num.push(f.num); if (f.den) den.push(f.den); }
+  const N = (k && num.length ? k + '·' : k) + num.join('') || '1';
+  return 'G(s) = ' + (den.length ? frac(N, den.join('')) : N);
+}
+
+// ---------- problems ----------
+const C = { blk: 'var(--block)' };
+const PROBLEMS = [
+ {
+  name: 'Problem 1', w: [1e-2, 1e4], mag: [-80, 60, 20], ph: [-195, -30, 15],
+  blocks: [
+    { type: 'pow', p: -1, label: '1/s' },
+    { type: 'gain', K: 10, label: 'K = 10', slider: [['K', 'log', 0.1, 1000]] },
+    { type: 'real', sign: 1, w0: 1, label: 'zero @ 1', slider: [['w0', 'log', 0.05, 20, 'ω<sub>z</sub>']] },
+    { type: 'real', sign: -1, w0: 10, label: 'pole @ 10', slider: [['w0', 'log', 0.5, 200, 'ω<sub>p</sub>']] },
+    { type: 'real', sign: -1, w0: 100, label: 'pole @ 100', slider: [['w0', 'log', 5, 2000, 'ω<sub>p</sub>']] },
+  ],
+  intro: 'Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.',
+  steps: [
+    { q: 'Look at the far left. How fast does the magnitude fall per decade, and where does the phase start?',
+      clue: 'Between ω = 0.01 and ω = 0.1 the magnitude drops from 60 dB to 40 dB: <b>−20 dB/decade</b>. The phase starts at <b>−90°</b>.',
+      what: 'One pole at the origin: an <b>integrator 1/s</b>.',
+      read: 'An integrator contributes −20 dB/dec at every frequency and a constant −90°. On its own it passes through 0 dB at ω = 1.',
+      marks: { pts: [[0.01, 60], [0.1, 40]], ppts: [[0.01, -90]] } },
+    { q: 'The integrator alone sits too low. How much do you need to shift it up?',
+      clue: 'Extend the low-frequency straight line to ω = 1. It reads <b>20 dB</b> there (the integrator alone reads 0 dB).',
+      what: 'A constant <b>gain K</b> with 20·log K = 20 dB.',
+      read: 'K = 10<sup>20/20</sup> = <b>10</b>. A gain shifts the magnitude up or down and leaves the phase alone.',
+      marks: { pts: [[1, 20]], vl: [1] } },
+    { q: 'Where does the slope first change, and does the phase go up or down there?',
+      clue: 'Around <b>ω = 1</b> the slope changes from −20 to <b>0 dB/dec</b>, and the phase <b>rises</b> from −90° toward −45°.',
+      what: 'A slope change of +20 dB/dec with a phase lead: a <b>real zero</b> at ω = 1, (s/1 + 1).',
+      read: 'The break frequency is where the two straight lines meet: ω<sub>z</sub> = <b>1 rad/s</b>.',
+      marks: { vl: [1] } },
+    { q: 'The reconstruction stays flat too long. Where does the measured curve start to fall again?',
+      clue: 'Around <b>ω = 10</b> the slope goes from 0 back to <b>−20 dB/dec</b> and the phase turns back down.',
+      what: 'A slope change of −20 dB/dec with a phase lag: a <b>real pole</b> at ω = 10, 1/(s/10 + 1).',
+      read: 'The flat plateau between 1 and 10 sits at 20 dB, which is consistent with K·(1/ω)·(ω/1) = 10.',
+      marks: { vl: [10] } },
+    { q: 'Compare the high-frequency end. Is the measured slope steeper than your reconstruction?',
+      clue: 'Above <b>ω = 100</b> the slope steepens to <b>−40 dB/dec</b> and the phase heads to <b>−180°</b>.',
+      what: 'One more <b>real pole</b> at ω = 100, 1/(s/100 + 1).',
+      read: 'Final phase −180° = −90° (integrator) + 90° (zero) − 90° − 90° (two poles). The count adds up.',
+      marks: { vl: [100] } },
+  ],
+  poly: frac('10<sup>4</sup>(s + 1)', 's(s + 10)(s + 100)'),
+  choices: [
+    [frac('10<sup>3</sup>(s+1)', 's(s+10)(s+100)'), 'Gain is 20 dB too low: the low-frequency line would read 0 dB at ω = 1, not 20 dB.'],
+    [frac('10<sup>4</sup>(s+10)', 's(s+1)(s+100)'), 'Zero and pole swapped: the slope would steepen to −40 dB/dec at ω = 1 instead of flattening.'],
+    [frac('10<sup>4</sup>(s+1)', 's(s+10)(s+100)'), null],
+    [frac('10(s+1)', 's(s+10)(s+100)'), 'This uses the Bode-form gain K = 10 in a polynomial-form expression, so it is 60 dB too low.'],
+    [frac('10<sup>4</sup>(1−s)', 's(s+10)(s+100)'), 'Right-half-plane zero: same magnitude, but the phase would keep falling below −180° and never rise toward −45°.'],
+  ],
+ },
+ {
+  name: 'Problem 2', w: [1e-2, 1e3], mag: [-60, 40, 10], ph: [-210, 120, 30],
+  blocks: [
+    { type: 'pow', p: 1, label: 's' },
+    { type: 'gain', K: 10, label: 'K = 10', slider: [['K', 'log', 0.1, 1000]] },
+    { type: 'real', sign: -1, w0: 1, label: 'pole @ 1', slider: [['w0', 'log', 0.05, 20, 'ω<sub>p</sub>']] },
+    { type: 'cplx', sign: -1, wn: 20, z: 0.1, label: 'complex poles', slider: [['wn', 'log', 2, 200, 'ω<sub>n</sub>'], ['z', 'lin', 0.01, 1, 'ζ']] },
+  ],
+  intro: 'Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.',
+  steps: [
+    { q: 'At the far left, is the magnitude rising or falling, and where does the phase start?',
+      clue: 'From ω = 0.01 to 0.1 the magnitude <b>rises</b> from −20 dB to 0 dB: <b>+20 dB/decade</b>. The phase starts at <b>+90°</b>.',
+      what: 'A zero at the origin: a <b>differentiator s</b>.',
+      read: 'A differentiator contributes +20 dB/dec and a constant +90°. On its own it crosses 0 dB at ω = 1.',
+      marks: { pts: [[0.01, -20], [0.1, 0]], ppts: [[0.01, 90]] } },
+    { q: 'The measured line crosses 0 dB earlier than s alone. What gain fixes that?',
+      clue: 'The measured low-frequency line crosses <b>0 dB at ω = 0.1</b>, a decade earlier than s alone.',
+      what: 'A <b>gain K</b> such that K·0.1 = 1.',
+      read: 'K = <b>10</b> (+20 dB). Check: the line extended to ω = 1 reads 20 dB.',
+      marks: { pts: [[0.1, 0]] } },
+    { q: 'Where does the rising slope stop, and what does the phase do there?',
+      clue: 'Around <b>ω = 1</b> the slope flattens from +20 to <b>0 dB/dec</b>, and the phase drops from +90° to about 0°.',
+      what: 'A <b>real pole</b> at ω = 1, 1/(s/1 + 1).',
+      read: 'The flat region sits at <b>20 dB</b> = 20·log(K·1), which is consistent with K = 10.',
+      marks: { vl: [1] } },
+    { q: 'Look at the sharp feature near ω = 20. What kind of block makes a peak and then −40 dB/dec?',
+      clue: 'A <b>resonant peak</b> at ω ≈ 20, then the slope drops to <b>−40 dB/dec</b>. The phase falls <b>180°</b> abruptly and passes −90° at ω ≈ 20.',
+      what: 'An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 20 rad/s.',
+      read: 'The peak is about 34 dB, or <b>14 dB above</b> the 20 dB asymptote. At ω<sub>n</sub> the pair contributes 1/(2ζ), so 1/(2ζ) = 10<sup>14/20</sup> ≈ 5 and <b>ζ ≈ 0.1</b>. Try the ζ slider to see how the peak height depends on damping.',
+      marks: { vl: [20], pts: [[20, 34]], ppts: [[20, -90]] } },
+  ],
+  poly: frac('4000 s', '(s + 1)(s<sup>2</sup> + 4s + 400)'),
+  choices: [
+    [frac('4000 s', '(s+1)(s<sup>2</sup>+4s+400)'), null],
+    [frac('400 s', '(s+1)(s<sup>2</sup>+4s+400)'), 'Gain is 20 dB too low: the flat region would sit at 0 dB instead of 20 dB.'],
+    [frac('4000 s', '(s+1)(s<sup>2</sup>+40s+400)'), 'ζ = 1 gives two real poles at ω = 20 and no resonant peak.'],
+    [frac('4000 s', '(s+1)(s<sup>2</sup>+4s+20)'), 'This uses ω<sub>n</sub> where ω<sub>n</sub><sup>2</sup> belongs, so the resonance would be near ω ≈ 4.5 rad/s.'],
+    [frac('4000', '(s+1)(s<sup>2</sup>+4s+400)'), 'No zero at the origin: the low-frequency slope would be 0 dB/dec with phase 0°.'],
+  ],
+ },
+ {
+  name: 'Problem 3', w: [1e-1, 1e3], mag: [-40, 100, 20], ph: [-210, 30, 30],
+  blocks: [
+    { type: 'pow', p: -2, label: '1/s²' },
+    { type: 'gain', K: 1000, label: 'K = 1000', slider: [['K', 'log', 10, 1e5]] },
+    { type: 'cplx', sign: 1, wn: 10, z: 0.1, label: 'complex zeros', slider: [['wn', 'log', 1, 100, 'ω<sub>z</sub>'], ['z', 'lin', 0.01, 1, 'ζ<sub>z</sub>']] },
+    { type: 'cplx', sign: -1, wn: 50, z: 0.05, label: 'complex poles', slider: [['wn', 'log', 5, 500, 'ω<sub>p</sub>'], ['z', 'lin', 0.01, 1, 'ζ<sub>p</sub>']] },
+  ],
+  intro: 'Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.',
+  steps: [
+    { q: 'How steep is the low-frequency slope, and what is the starting phase?',
+      clue: 'From ω = 0.1 to ω = 1 the magnitude drops from 100 dB to 60 dB: <b>−40 dB/decade</b>. The phase starts at <b>−180°</b>.',
+      what: 'Two poles at the origin: a <b>double integrator 1/s²</b>.',
+      read: 'Each integrator gives −20 dB/dec and −90°, so two give −40 dB/dec and −180°.',
+      marks: { pts: [[0.1, 100], [1, 60]], ppts: [[0.1, -180]] } },
+    { q: 'What does the low-frequency line read at ω = 1?',
+      clue: 'The −40 dB/dec line reads <b>60 dB at ω = 1</b> (1/s² alone reads 0 dB there).',
+      what: 'A <b>gain K</b> with 20·log K = 60 dB.',
+      read: 'K = 10<sup>60/20</sup> = <b>1000</b>.',
+      marks: { pts: [[1, 60]], vl: [1] } },
+    { q: 'There is a sharp notch near ω = 10. Which way does the phase jump there?',
+      clue: 'A sharp <b>dip</b> at ω = 10, after which the slope is <b>0 dB/dec</b>. The phase <b>jumps up by 180°</b>, from −180° to about 0°.',
+      what: 'The mirror image of a resonance: a <b>complex-conjugate zero pair</b> with ω<sub>z</sub> = 10 rad/s.',
+      read: 'The asymptote at ω = 10 is 60 − 40 = 20 dB, and the dip bottoms out near 6 dB, about <b>14 dB below</b>. At ω<sub>z</sub> the pair contributes 2ζ, so 2ζ = 10<sup>−14/20</sup> ≈ 0.2 and <b>ζ<sub>z</sub> ≈ 0.1</b>.',
+      marks: { vl: [10], pts: [[10, 6]], ppts: [[10, -90]] } },
+    { q: 'Now there is a peak near ω = 50. What closes the flat region?',
+      clue: 'A sharp <b>peak</b> at ω = 50, then <b>−40 dB/dec</b>. The phase <b>drops 180°</b> back to −180°.',
+      what: 'A <b>complex-conjugate pole pair</b> with ω<sub>p</sub> = 50 rad/s.',
+      read: 'The peak is about 40 dB, or <b>20 dB above</b> the 20 dB plateau, so 1/(2ζ) = 10 and <b>ζ<sub>p</sub> ≈ 0.05</b>. Check: the plateau equals K/ω<sub>z</sub><sup>2</sup> = 1000/100 = 10 → 20 dB.',
+      marks: { vl: [50], pts: [[50, 40]], ppts: [[50, -90]] } },
+  ],
+  poly: frac('25000 (s<sup>2</sup> + 2s + 100)', 's<sup>2</sup>(s<sup>2</sup> + 5s + 2500)'),
+  choices: [
+    [frac('25000(s<sup>2</sup>+5s+2500)', 's<sup>2</sup>(s<sup>2</sup>+2s+100)'), 'Poles and zeros swapped: the peak would be at ω = 10 and the dip at ω = 50.'],
+    [frac('1000(s<sup>2</sup>+2s+100)', 's<sup>2</sup>(s<sup>2</sup>+5s+2500)'), 'This uses the Bode-form gain K = 1000 in a polynomial-form expression, so it is 28 dB too low.'],
+    [frac('25000(s<sup>2</sup>+20s+100)', 's<sup>2</sup>(s<sup>2</sup>+5s+2500)'), 'ζ<sub>z</sub> = 1 makes a double real zero at ω = 10, with no sharp dip and no phase jump.'],
+    [frac('25000(s<sup>2</sup>+2s+100)', 's<sup>2</sup>(s<sup>2</sup>+5s+2500)'), null],
+    [frac('25000(s<sup>2</sup>+2s+100)', 's(s<sup>2</sup>+5s+2500)'), 'A single integrator: the low-frequency slope would be −20 dB/dec with phase −90°.'],
+  ],
+ },
+ {
+  name: 'Problem 4', w: [1e-2, 1e4], mag: [-30, 20, 10], ph: [-120, 60, 30],
+  blocks: [
+    { type: 'gain', K: 4, label: 'K = 4', slider: [['K', 'log', 0.04, 400]] },
+    { type: 'real', sign: -1, w0: 0.2, label: 'pole @ 0.2', slider: [['w0', 'log', 0.01, 4, 'ω<sub>p</sub>']] },
+    { type: 'real', sign: 1, n: 2, w0: 2, label: 'double zero @ 2', slider: [['w0', 'log', 0.1, 40, 'ω<sub>z</sub>']] },
+    { type: 'real', sign: -1, w0: 20, label: 'pole @ 20', slider: [['w0', 'log', 1, 400, 'ω<sub>p</sub>']] },
+    { type: 'real', sign: -1, w0: 200, label: 'pole @ 200', slider: [['w0', 'log', 10, 4000, 'ω<sub>p</sub>']] },
+  ],
+  intro: 'Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope. In this problem the magnitude dips and then recovers, so compare the size of each slope change with the corner it makes.',
+  steps: [
+    { q: 'At the far left, is the magnitude sloped or flat? What level does it sit at?',
+      clue: 'The magnitude is <b>flat at 12 dB</b> and the phase starts at <b>0°</b>.',
+      what: 'A type-0 system with a positive <b>gain K</b>.',
+      read: 'K = 10<sup>12/20</sup> ≈ <b>4</b>. A handy fact: 6 dB is a factor of 2, so 12 dB is a factor of 4.',
+      marks: { pts: [[0.01, 12]], ppts: [[0.01, 0]] } },
+    { q: 'Where does the magnitude start to fall, and how steeply?',
+      clue: 'Around <b>ω = 0.2</b> the slope changes from 0 to <b>−20 dB/dec</b>. The magnitude there is about 9 dB, 3 dB below the 12 dB level, and the phase heads down.',
+      what: 'A <b>real pole</b> at ω = 0.2, 1/(s/0.2 + 1).',
+      read: 'ω<sub>p</sub> = <b>0.2 rad/s</b>. Between 0.2 and 2 the asymptote falls by 20 dB, from 12 dB to −8 dB.',
+      marks: { vl: [0.2], pts: [[0.2, 9.1]] } },
+    { q: 'The magnitude stops falling and starts rising near ω = 2. How large is the slope change? Is there a sharp notch?',
+      clue: 'At <b>ω = 2</b> the slope goes from −20 to <b>+20 dB/dec</b>, a change of <b>+40</b>. The corner is smooth with no notch. The phase climbs steeply, from about −40° to about <b>+40°</b>. A system with poles only could never have a positive phase.',
+      what: 'A <b>double real zero</b> at ω = 2, (s/2 + 1)<sup>2</sup>. A +40 change could also come from a complex zero pair, but that would make a sharp notch.',
+      read: 'At the corner the exact curve is about −2 dB, which is <b>6 dB above</b> the −8 dB asymptote corner (3 dB per zero). A notch below the asymptote would point to a lightly damped complex pair instead.',
+      marks: { vl: [2], pts: [[2, -2]] } },
+    { q: 'Where does the rising slope level off?',
+      clue: 'Around <b>ω = 20</b> the slope goes from +20 to <b>0 dB/dec</b>, and the phase turns back down.',
+      what: 'A <b>real pole</b> at ω = 20, 1/(s/20 + 1).',
+      read: 'The asymptote climbs 20 dB from 2 to 20, from −8 dB back up to <b>12 dB</b>. So the plateau after ω = 20 is at the same level as the low-frequency one.',
+      marks: { vl: [20], pts: [[20, 9.1]] } },
+    { q: 'What happens at the high-frequency end?',
+      clue: 'Around <b>ω = 200</b> the slope goes from 0 to <b>−20 dB/dec</b>, and the phase settles at <b>−90°</b>.',
+      what: 'A <b>real pole</b> at ω = 200, 1/(s/200 + 1).',
+      read: 'Count check: three poles minus two zeros leaves one net pole, so the final slope is −20 dB/dec and the final phase is −90°.',
+      marks: { vl: [200], pts: [[200, 9]] } },
+  ],
+  poly: frac('800 (s + 2)<sup>2</sup>', '(s + 0.2)(s + 20)(s + 200)'),
+  choices: [
+    [frac('800(s<sup>2</sup>+0.4s+4)', '(s+0.2)(s+20)(s+200)'), 'Complex zero pair with ζ = 0.1: this would make a sharp notch about 14 dB below the asymptote at ω = 2, not a smooth corner.'],
+    [frac('800(s+2)', '(s+0.2)(s+20)(s+200)'), 'A single zero: the slope would only reach 0 dB/dec after ω = 2, and the final slope would be −40 dB/dec.'],
+    [frac('800(s+0.2)<sup>2</sup>', '(s+2)(s+20)(s+200)'), 'Zeros and pole swapped: the magnitude would rise first, starting about 48 dB lower.'],
+    [frac('800(s+2)<sup>2</sup>', '(s+0.2)(s+20)(s+200)'), null],
+    [frac('4(s+2)<sup>2</sup>', '(s+0.2)(s+20)(s+200)'), 'This uses the Bode-form gain K = 4 in a polynomial-form expression, so the low-frequency level would be −34 dB instead of 12 dB.'],
+  ],
+ },
+ {
+  name: 'Problem 5', w: [1e-2, 1e3], mag: [-140, 60, 20], ph: [-300, -60, 30],
+  blocks: [
+    { type: 'pow', p: -1, label: '1/s' },
+    { type: 'gain', K: 10, label: 'K = 10', slider: [['K', 'log', 0.1, 1000]] },
+    { type: 'cplx', sign: -1, wn: 1, z: 0.05, label: 'complex poles', slider: [['wn', 'log', 0.1, 10, 'ω<sub>n</sub>'], ['z', 'lin', 0.01, 1, 'ζ']] },
+    { type: 'real', sign: 1, w0: 10, label: 'zero @ 10', slider: [['w0', 'log', 0.5, 200, 'ω<sub>z</sub>']] },
+    { type: 'real', sign: -1, w0: 100, label: 'pole @ 100', slider: [['w0', 'log', 5, 2000, 'ω<sub>p</sub>']] },
+  ],
+  intro: 'Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.' + ' In this problem a resonance sits right where you would normally read the gain, so read it somewhere else.',
+  steps: [
+    { q: 'What are the low-frequency slope and phase?',
+      clue: 'From ω = 0.01 to 0.1 the magnitude drops from 60 dB to 40 dB: <b>−20 dB/dec</b>. The phase starts at <b>−90°</b>.',
+      what: 'An <b>integrator 1/s</b>.',
+      read: 'One pole at the origin: −20 dB/dec and −90°.',
+      marks: { pts: [[0.01, 60], [0.1, 40]], ppts: [[0.01, -90]] } },
+    { q: 'You can\'t read the gain at ω = 1 here because the resonance distorts the curve. Where can you read it instead?',
+      clue: 'Read the clean low-frequency line at <b>ω = 0.1</b>: it is <b>40 dB</b>, so |K/(j0.1)| = 100.',
+      what: 'A <b>gain K</b> with K/0.1 = 100.',
+      read: 'K = 100 × 0.1 = <b>10</b>. In general K = ω·10<sup>|G|<sub>dB</sub>/20</sup> at any ω on the integrator line. Extended to ω = 1, the asymptote reads 20 dB.',
+      marks: { pts: [[0.1, 40]], vl: [0.1] } },
+    { q: 'What happens at ω = 1? Look at the peak, the new slope and the size of the phase drop.',
+      clue: 'A sharp <b>peak</b> at ω ≈ 1, after which the slope is <b>−60 dB/dec</b> (a change of −40). The phase drops <b>180°</b> suddenly, from −90° to −270°.',
+      what: 'An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 1 rad/s.',
+      read: 'The asymptote at ω = 1 is 20 dB and the peak is about <b>40 dB</b>, so it is 20 dB higher: 1/(2ζ) = 10 and <b>ζ ≈ 0.05</b>.',
+      marks: { vl: [1], pts: [[1, 40]], ppts: [[1, -180]] } },
+    { q: 'Above the resonance, does the roll-off ease at some point?',
+      clue: 'Around <b>ω = 10</b> the slope eases from −60 to <b>−40 dB/dec</b>, and the phase climbs by about 90°.',
+      what: 'A <b>real zero</b> at ω = 10, (s/10 + 1).',
+      read: 'ω<sub>z</sub> = <b>10 rad/s</b>. A zero above a resonance like this is common in lead-compensated or flexible mechanical systems.',
+      marks: { vl: [10] } },
+    { q: 'Does the slope change once more at the high-frequency end?',
+      clue: 'Around <b>ω = 100</b> the slope steepens back to <b>−60 dB/dec</b>, and the phase falls again toward −270°.',
+      what: 'A <b>real pole</b> at ω = 100, 1/(s/100 + 1).',
+      read: 'Final slope: −20 (1/s) − 40 (pair) + 20 (zero) − 20 (pole) = −60 dB/dec. Final phase: −270°.',
+      marks: { vl: [100] } },
+  ],
+  poly: frac('100 (s + 10)', 's (s<sup>2</sup> + 0.1s + 1)(s + 100)'),
+  choices: [
+    [frac('100(s+10)', 's(s<sup>2</sup>+2s+1)(s+100)'), 'ζ = 1 makes a double real pole at ω = 1, with no resonant peak and a gradual phase drop.'],
+    [frac('10(s+10)', 's(s<sup>2</sup>+0.1s+1)(s+100)'), 'Gain is 20 dB too low: the low-frequency line would read 20 dB at ω = 0.1, not 40 dB.'],
+    [frac('100(s+10)', 's<sup>2</sup>(s<sup>2</sup>+0.1s+1)(s+100)'), 'A double integrator: the low-frequency slope would be −40 dB/dec with phase −180°.'],
+    [frac('100(s+100)', 's(s<sup>2</sup>+0.1s+1)(s+10)'), 'Zero and pole swapped: the slope would steepen to −80 dB/dec at ω = 10 instead of easing.'],
+    [frac('100(s+10)', 's(s<sup>2</sup>+0.1s+1)(s+100)'), null],
+  ],
+ },
+ {
+  name: 'Problem 6', w: [1e-2, 1e4], mag: [-60, 30, 10], ph: [-300, -60, 30],
+  blocks: [
+    { type: 'gain', K: -5, label: 'K = −5', slider: [['K', 'log', 0.05, 500, '|K|']] },
+    { type: 'real', sign: -1, w0: 1, label: 'pole @ 1', slider: [['w0', 'log', 0.05, 20, 'ω<sub>p</sub>']] },
+    { type: 'cplx', sign: 1, wn: 10, z: 0.1, label: 'complex zeros', slider: [['wn', 'log', 1, 100, 'ω<sub>z</sub>'], ['z', 'lin', 0.01, 1, 'ζ<sub>z</sub>']] },
+    { type: 'real', sign: -1, n: 2, w0: 100, label: 'double pole @ 100', slider: [['w0', 'log', 5, 2000, 'ω<sub>p</sub>']] },
+  ],
+  intro: 'Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.' + ' In this problem, pay attention to the phase at the very start.',
+  steps: [
+    { q: 'The magnitude starts flat. Why doesn\'t the phase start at 0°?',
+      clue: 'The magnitude is <b>flat at about 14 dB</b>, but the phase starts at <b>−180°</b>, not 0°.',
+      what: 'A <b>negative gain</b>. A sign flip adds ±180° of phase and leaves the magnitude unchanged.',
+      read: '|K| = 10<sup>14/20</sup> ≈ <b>5</b>, so K = <b>−5</b>. Phase −180° and +180° are the same angle; this page draws it as −180°.',
+      marks: { pts: [[0.01, 14]], ppts: [[0.01, -180]] } },
+    { q: 'Where does the first slope change happen?',
+      clue: 'At <b>ω = 1</b> the slope goes from 0 to <b>−20 dB/dec</b> and the phase falls by about 90°.',
+      what: 'A <b>real pole</b> at ω = 1, 1/(s/1 + 1).',
+      read: 'At the break frequency the magnitude is 14 − 3 = 11 dB.',
+      marks: { vl: [1], pts: [[1, 10.9]] } },
+    { q: 'There is a deep notch near ω = 10, and the slope afterwards goes up. What block does both?',
+      clue: 'A sharp <b>dip</b> at ω = 10. Afterwards the slope is <b>+20 dB/dec</b>, a change of +40. The phase <b>jumps up by 180°</b>.',
+      what: 'A <b>complex-conjugate zero pair</b> with ω<sub>z</sub> = 10 rad/s.',
+      read: 'The asymptote at ω = 10 is 14 − 20 = −6 dB, and the dip reaches about <b>−20 dB</b>, 14 dB lower. So 2ζ = 10<sup>−14/20</sup> ≈ 0.2 and <b>ζ<sub>z</sub> ≈ 0.1</b>.',
+      marks: { vl: [10], pts: [[10, -20]] } },
+    { q: 'The rising slope turns over near ω = 100. By how much does the slope change?',
+      clue: 'At <b>ω = 100</b> the slope goes from +20 to <b>−20 dB/dec</b>, a change of −40. It is a rounded corner with no peak, and the phase drops another <b>180°</b>.',
+      what: 'A <b>double real pole</b> at ω = 100, 1/(s/100 + 1)<sup>2</sup>.',
+      read: 'No peak means the poles are real. If they were a lightly damped complex pair, you would see a resonance.',
+      marks: { vl: [100] } },
+  ],
+  poly: frac('−500 (s<sup>2</sup> + 2s + 100)', '(s + 1)(s + 100)<sup>2</sup>'),
+  choices: [
+    [frac('500(s<sup>2</sup>+2s+100)', '(s+1)(s+100)<sup>2</sup>'), 'Positive gain: same magnitude, but the phase would start at 0°, not −180°.'],
+    [frac('−5(s<sup>2</sup>+2s+100)', '(s+1)(s+100)<sup>2</sup>'), 'This uses the Bode-form gain K = −5 in a polynomial-form expression, so it is 40 dB too low.'],
+    [frac('−500(s<sup>2</sup>+2s+100)', '(s+1)(s+100)<sup>2</sup>'), null],
+    [frac('−500(s<sup>2</sup>+20s+100)', '(s+1)(s+100)<sup>2</sup>'), 'ζ<sub>z</sub> = 1 makes a double real zero, with no deep notch and no sudden phase jump.'],
+    [frac('−500(s<sup>2</sup>+2s+100)', '(s+1)<sup>2</sup>(s+100)'), 'Double pole at ω = 1 and single pole at ω = 100: the slope would be −40 dB/dec between 1 and 10, and 0 dB/dec at high frequency.'],
+  ],
+ },
+ {
+  name: 'Problem 7', diff: "Warm-up", w: [0.01, 1000], mag: [-60, 40, 20], ph: [-210, 30, 30],
+  blocks: [{"type": "gain", "K": 50, "label": "K = 50"}, {"type": "real", "sign": -1, "w0": 2, "n": 1, "label": "pole @ 2"}, {"type": "real", "sign": -1, "w0": 20, "n": 1, "label": "pole @ 20"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "At the far left the magnitude is flat. What level does it sit at, and where does the phase start?", clue: "The magnitude is flat at <b>34 dB</b> and the phase starts at <b>0°</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>34/20</sup> ≈ <b>50</b>.", marks: {"pts": [[0.01, 33.98]], "ppts": [[0.01, -0.32]]} },
+    { q: "What happens to the slope near ω ≈ 2? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 2</b> the slope changes from 0 to <b>−20 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 2, 1/(s/2 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 2 rad/s</b>. The exact curve there is 30.9 dB, about 3 dB below the 34 dB asymptote corner.", marks: {"vl": [2], "pts": [[2, 30.93]]} },
+    { q: "What happens to the slope near ω ≈ 20? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 20</b> the slope changes from −20 to <b>−40 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 20, 1/(s/20 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 20 rad/s</b>. The exact curve there is 10.9 dB, about 3 dB below the 14 dB asymptote corner.", marks: {"vl": [20], "pts": [[20, 10.93]]} }
+  ],
+  poly: frac("2000", "(s+2)(s+20)"),
+  choices: [
+    [frac("50", "(s+2)(s+20)"), "This uses the Bode-form gain K = 50 in a polynomial-form expression, so the whole magnitude is 32 dB too low."],
+    [frac("2000", "s(s+2)(s+20)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be −20 dB/dec, with phase starting near −90°."],
+    [frac("2000", "(s+2)(s+20)"), null],
+    [frac("2000", "(s+2)<sup>2</sup>(s+20)"), "Double pole at ω = 2: the slope would change by −40 dB/dec there instead of −20."],
+    [frac("200", "(s+2)(s+20)"), "Gain is 20 dB too low: every magnitude reading would drop by 20 dB."]
+  ],
+ },
+ {
+  name: 'Problem 8', diff: "Warm-up", w: [0.01, 100], mag: [-100, 60, 20], ph: [-300, -60, 30],
+  blocks: [{"type": "pow", "p": -1, "label": "1/s"}, {"type": "gain", "K": 5, "label": "K = 5"}, {"type": "real", "sign": -1, "w0": 4, "n": 2, "label": "double pole @ 4"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.01 to ω = 0.1 the magnitude goes from 54 dB to 34 dB: <b>−20 dB/decade</b>. The phase starts at <b>−90°</b>.", what: "One pole at the origin: an <b>integrator 1/s</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: −20 dB/dec and −90°.", marks: {"pts": [[0.01, 53.98], [0.1, 33.97]], "ppts": [[0.01, -90.29]]} },
+    { q: "Your origin block alone passes through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 1</b>: it reads <b>14 dB</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>14/20</sup> = <b>5</b>.", marks: {"pts": [[1, 13.98]], "vl": [1]} },
+    { q: "What happens to the slope near ω ≈ 4? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 4</b> the slope changes from −20 to <b>−60 dB/dec</b>, a change of −40. The corner is smooth, with no peak or notch, and the phase falls by about 180° in total.", what: "A double real pole at ω = 4, 1/(s/4 + 1)<sup>2</sup>. A change of 40 dB/dec with a smooth corner means two real factors, not a complex pair.", read: "The break frequency is where the asymptotes meet: <b>ω = 4 rad/s</b>. The exact curve there is −4.1 dB, about 6 dB below the 1.9 dB asymptote corner.", marks: {"vl": [4], "pts": [[4, -4.08]]} }
+  ],
+  poly: frac("80", "s(s+4)<sup>2</sup>"),
+  choices: [
+    [frac("80", "s(s+4)<sup>2</sup>"), null],
+    [frac("5", "s(s+4)<sup>2</sup>"), "This uses the Bode-form gain K = 5 in a polynomial-form expression, so the whole magnitude is 24 dB too low."],
+    [frac("80", "(s+4)<sup>2</sup>"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be 0 dB/dec, with phase starting near 0°."],
+    [frac("80", "s(s+4)"), "Single pole at ω = 4: the slope would change by −20 dB/dec there instead of −40."],
+    [frac("8", "s(s+4)<sup>2</sup>"), "Gain is 20 dB too low: every magnitude reading would drop by 20 dB."]
+  ],
+ },
+ {
+  name: 'Problem 9', diff: "Warm-up", w: [0.01, 1000], mag: [-70, -10, 10], ph: [-120, 120, 30],
+  blocks: [{"type": "pow", "p": 1, "label": "s"}, {"type": "gain", "K": 0.1, "label": "K = 0.1"}, {"type": "real", "sign": -1, "w0": 1, "n": 1, "label": "pole @ 1"}, {"type": "real", "sign": -1, "w0": 100, "n": 1, "label": "pole @ 100"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.01 to ω = 0.1 the magnitude goes from −60 dB to −40 dB: <b>+20 dB/decade</b>. The phase starts at <b>89°</b>.", what: "A zero at the origin: a <b>differentiator s</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: +20 dB/dec and 90°.", marks: {"pts": [[0.01, -60.0], [0.1, -40.04]], "ppts": [[0.01, 89.42]]} },
+    { q: "Your origin block alone passes through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 0.1</b>: it reads <b>−40 dB</b>.", what: "A positive <b>gain K</b>.", read: "On that line |G| = |K|·ω<sup>1</sup>, so |K| = 10<sup>−40/20</sup> × 0.1<sup>-1</sup> = <b>0.1</b>.", marks: {"pts": [[0.1, -40.0]], "vl": [0.1]} },
+    { q: "What happens to the slope near ω ≈ 1? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 1</b> the slope changes from +20 to <b>0 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 1, 1/(s/1 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 1 rad/s</b>. The exact curve there is −23 dB, about 3 dB below the −20 dB asymptote corner.", marks: {"vl": [1], "pts": [[1, -23.01]]} },
+    { q: "What happens to the slope near ω ≈ 100? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 100</b> the slope changes from 0 to <b>−20 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 100, 1/(s/100 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 100 rad/s</b>. The exact curve there is −23 dB, about 3 dB below the −20 dB asymptote corner.", marks: {"vl": [100], "pts": [[100, -23.01]]} }
+  ],
+  poly: frac("10s", "(s+1)(s+100)"),
+  choices: [
+    [frac("0.1s", "(s+1)(s+100)"), "This uses the Bode-form gain K = 0.1 in a polynomial-form expression, so the whole magnitude is 40 dB too low."],
+    [frac("10", "(s+1)(s+100)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be 0 dB/dec, with phase starting near 0°."],
+    [frac("10s", "(s+1)<sup>2</sup>(s+100)"), "Double pole at ω = 1: the slope would change by −40 dB/dec there instead of −20."],
+    [frac("10s", "(s+1)(s+100)"), null],
+    [frac("s", "(s+1)(s+100)"), "Gain is 20 dB too low: every magnitude reading would drop by 20 dB."]
+  ],
+ },
+ {
+  name: 'Problem 10', diff: "Intermediate", w: [0.01, 1000], mag: [-10, 40, 10], ph: [-120, 90, 30],
+  blocks: [{"type": "gain", "K": 2, "label": "K = 2"}, {"type": "real", "sign": 1, "w0": 5, "n": 1, "label": "zero @ 5"}, {"type": "cplx", "sign": -1, "wn": 50, "z": 0.2, "label": "complex poles"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "At the far left the magnitude is flat. What level does it sit at, and where does the phase start?", clue: "The magnitude is flat at <b>6 dB</b> and the phase starts at <b>0°</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>6/20</sup> ≈ <b>2</b>.", marks: {"pts": [[0.01, 6.02]], "ppts": [[0.01, 0.11]]} },
+    { q: "What happens to the slope near ω ≈ 5? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 5</b> the slope changes from 0 to <b>+20 dB/dec</b>, a change of +20. The corner is smooth, with no peak or notch, and the phase rises by about 90° in total.", what: "A real zero at ω = 5, (s/5 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 5 rad/s</b>. The exact curve there is 9.1 dB, about 3 dB above the 6 dB asymptote corner.", marks: {"vl": [5], "pts": [[5, 9.11]]} },
+    { q: "Look at the feature near ω ≈ 50. Is it a peak or a notch? How much does the slope change, and what does the phase do?", clue: "A rounded <b>peak</b> at ω ≈ 50. The slope changes from +20 to <b>−20 dB/dec</b>, a change of −40, and the phase drops by about 180° around ω = 50.", what: "An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 50 rad/s.", read: "At ω<sub>n</sub> the exact curve is 34 dB. Removing the other blocks' contributions leaves <b>8 dB</b> for the pair alone. The pair alone contributes 1/(2ζ) there, so 1/(2ζ) = 10<sup>8/20</sup> ≈ 2.5 and <b>ζ ≈ 0.2</b>.", marks: {"vl": [50], "pts": [[50, 34.02]], "ppts": [[50, -5.71]]} }
+  ],
+  poly: frac("1000(s+5)", "(s<sup>2</sup>+20s+2500)"),
+  choices: [
+    [frac("2(s+5)", "(s<sup>2</sup>+20s+2500)"), "This uses the Bode-form gain K = 2 in a polynomial-form expression, so the whole magnitude is 54 dB too low."],
+    [frac("1000(s+5)", "(s<sup>2</sup>+20s+2500)"), null],
+    [frac("1000(s+5)", "(s<sup>2</sup>+100s+2500)"), "ζ = 1 turns the pair at ω = 50 into a double real pole: no peak and a gradual phase change."],
+    [frac("1000(s+5)", "s(s<sup>2</sup>+20s+2500)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be −20 dB/dec, with phase starting near −90°."],
+    [frac("1000(s+5)<sup>2</sup>", "(s<sup>2</sup>+20s+2500)"), "Double zero at ω = 5: the slope would change by +40 dB/dec there instead of +20."]
+  ],
+ },
+ {
+  name: 'Problem 11', diff: "Warm-up", w: [0.01, 100], mag: [-60, 100, 20], ph: [-210, -90, 30],
+  blocks: [{"type": "pow", "p": -2, "label": "1/s²"}, {"type": "gain", "K": 3, "label": "K = 3"}, {"type": "real", "sign": 1, "w0": 1, "n": 1, "label": "zero @ 1"}, {"type": "real", "sign": -1, "w0": 10, "n": 1, "label": "pole @ 10"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.01 to ω = 0.1 the magnitude goes from 89.5 dB to 49.6 dB: <b>−40 dB/decade</b>. The phase starts at <b>−179°</b>.", what: "Two poles at the origin: a <b>double integrator 1/s²</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: −40 dB/dec and −180°.", marks: {"pts": [[0.01, 89.54], [0.1, 49.59]], "ppts": [[0.01, -179.48]]} },
+    { q: "Your origin blocks alone pass through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 0.1</b>: it reads <b>49.5 dB</b>.", what: "A positive <b>gain K</b>.", read: "On that line |G| = |K|·ω<sup>-2</sup>, so |K| = 10<sup>49.5/20</sup> × 0.1<sup>2</sup> = <b>3</b>.", marks: {"pts": [[0.1, 49.54]], "vl": [0.1]} },
+    { q: "What happens to the slope near ω ≈ 1? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 1</b> the slope changes from −40 to <b>−20 dB/dec</b>, a change of +20. The corner is smooth, with no peak or notch, and the phase rises by about 90° in total.", what: "A real zero at ω = 1, (s/1 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 1 rad/s</b>. The exact curve there is 12.5 dB, about 3 dB above the 9.5 dB asymptote corner.", marks: {"vl": [1], "pts": [[1, 12.51]]} },
+    { q: "What happens to the slope near ω ≈ 10? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 10</b> the slope changes from −20 to <b>−40 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 10, 1/(s/10 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 10 rad/s</b>. The exact curve there is −13.4 dB, about 3 dB below the −10.5 dB asymptote corner.", marks: {"vl": [10], "pts": [[10, -13.42]]} }
+  ],
+  poly: frac("30(s+1)", "s<sup>2</sup>(s+10)"),
+  choices: [
+    [frac("3(s+1)", "s<sup>2</sup>(s+10)"), "This uses the Bode-form gain K = 3 in a polynomial-form expression, so the whole magnitude is 20 dB too low."],
+    [frac("30(s+10)", "s<sup>2</sup>(s+1)"), "The zero at ω = 1 and the pole at ω = 10 are swapped, so the slope changes the wrong way at both frequencies."],
+    [frac("30(s+1)", "s(s+10)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be −20 dB/dec, with phase starting near −90°."],
+    [frac("30(s+1)", "s<sup>2</sup>(s+10)<sup>2</sup>"), "Double pole at ω = 10: the slope would change by −40 dB/dec there instead of −20."],
+    [frac("30(s+1)", "s<sup>2</sup>(s+10)"), null]
+  ],
+ },
+ {
+  name: 'Problem 12', diff: "Intermediate", w: [0.1, 1000], mag: [-160, 80, 40], ph: [-405, -45, 45],
+  blocks: [{"type": "pow", "p": -1, "label": "1/s"}, {"type": "gain", "K": 20, "label": "K = 20"}, {"type": "cplx", "sign": -1, "wn": 10, "z": 0.3, "label": "complex poles"}, {"type": "real", "sign": -1, "w0": 100, "n": 1, "label": "pole @ 100"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope. The resonance here is well damped, so the peak is small.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.1 to ω = 1 the magnitude goes from 46 dB to 26.1 dB: <b>−20 dB/decade</b>. The phase starts at <b>−90°</b>.", what: "One pole at the origin: an <b>integrator 1/s</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: −20 dB/dec and −90°.", marks: {"pts": [[0.1, 46.02], [1.0, 26.09]], "ppts": [[0.1, -90.4]]} },
+    { q: "Your origin block alone passes through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 1</b>: it reads <b>26 dB</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>26/20</sup> = <b>20</b>.", marks: {"pts": [[1, 26.02]], "vl": [1]} },
+    { q: "Look at the feature near ω ≈ 10. Is it a peak or a notch? How much does the slope change, and what does the phase do?", clue: "A rounded <b>peak</b> at ω ≈ 10. The slope changes from −20 to <b>−60 dB/dec</b>, a change of −40, and the phase drops by about 180° around ω = 10.", what: "An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 10 rad/s.", read: "At ω<sub>n</sub> the exact curve is 10.4 dB. Removing the other blocks' contributions leaves <b>4.4 dB</b> for the pair alone. The pair alone contributes 1/(2ζ) there, so 1/(2ζ) = 10<sup>4.4/20</sup> ≈ 1.67 and <b>ζ ≈ 0.3</b>.", marks: {"vl": [10], "pts": [[10, 10.41]], "ppts": [[10, -185.71]]} },
+    { q: "What happens to the slope near ω ≈ 100? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 100</b> the slope changes from −60 to <b>−80 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 100, 1/(s/100 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 100 rad/s</b>. The exact curve there is −56.9 dB, about 3 dB below the −54 dB asymptote corner.", marks: {"vl": [100], "pts": [[100, -56.92]]} }
+  ],
+  poly: frac("2\u00d710<sup>5</sup>", "s(s<sup>2</sup>+6s+100)(s+100)"),
+  choices: [
+    [frac("20", "s(s<sup>2</sup>+6s+100)(s+100)"), "This uses the Bode-form gain K = 20 in a polynomial-form expression, so the whole magnitude is 80 dB too low."],
+    [frac("2\u00d710<sup>5</sup>", "s(s<sup>2</sup>+20s+100)(s+100)"), "ζ = 1 turns the pair at ω = 10 into a double real pole: no peak and a gradual phase change."],
+    [frac("2\u00d710<sup>5</sup>", "s(s<sup>2</sup>+6s+100)(s+100)"), null],
+    [frac("2\u00d710<sup>5</sup>", "(s<sup>2</sup>+6s+100)(s+100)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be 0 dB/dec, with phase starting near 0°."],
+    [frac("2\u00d710<sup>5</sup>", "s(s<sup>2</sup>+6s+100)(s+100)<sup>2</sup>"), "Double pole at ω = 100: the slope would change by −40 dB/dec there instead of −20."]
+  ],
+ },
+ {
+  name: 'Problem 13', diff: "Challenging", w: [0.001, 1000], mag: [-20, 30, 10], ph: [-90, 90, 30],
+  blocks: [{"type": "gain", "K": 10, "label": "K = 10"}, {"type": "real", "sign": -1, "w0": 0.3, "n": 1, "label": "pole @ 0.3"}, {"type": "cplx", "sign": 1, "wn": 3, "z": 0.15, "label": "complex zeros"}, {"type": "real", "sign": -1, "w0": 30, "n": 1, "label": "pole @ 30"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope. Watch for a slope that turns upward.",
+  steps: [
+    { q: "At the far left the magnitude is flat. What level does it sit at, and where does the phase start?", clue: "The magnitude is flat at <b>20 dB</b> and the phase starts at <b>0°</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>20/20</sup> ≈ <b>10</b>.", marks: {"pts": [[0.001, 20.0]], "ppts": [[0.001, -0.19]]} },
+    { q: "What happens to the slope near ω ≈ 0.3? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 0.3</b> the slope changes from 0 to <b>−20 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 0.3, 1/(s/0.3 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 0.3 rad/s</b>. The exact curve there is 16.9 dB, about 3 dB below the 20 dB asymptote corner.", marks: {"vl": [0.3], "pts": [[0.3, 16.91]]} },
+    { q: "Look at the feature near ω ≈ 3. Is it a peak or a notch? How much does the slope change, and what does the phase do?", clue: "A rounded <b>notch</b> at ω ≈ 3. The slope changes from −20 to <b>+20 dB/dec</b>, a change of +40, and the phase jumps up by about 180° around ω = 3.", what: "An underdamped <b>complex-conjugate zero pair</b> with ω<sub>n</sub> = 3 rad/s.", read: "At ω<sub>n</sub> the exact curve is −10.5 dB. Removing the other blocks' contributions leaves <b>−10.5 dB</b> for the pair alone. The pair alone contributes 2ζ there, so 2ζ = 10<sup>−10.5/20</sup> ≈ 0.3 and <b>ζ ≈ 0.15</b>.", marks: {"vl": [3], "pts": [[3, -10.54]], "ppts": [[3, -0.0]]} },
+    { q: "What happens to the slope near ω ≈ 30? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 30</b> the slope changes from +20 to <b>0 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 30, 1/(s/30 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 30 rad/s</b>. The exact curve there is 16.9 dB, about 3 dB below the 20 dB asymptote corner.", marks: {"vl": [30], "pts": [[30, 16.91]]} }
+  ],
+  poly: frac("10(s<sup>2</sup>+0.9s+9)", "(s+0.3)(s+30)"),
+  choices: [
+    [frac("10(s<sup>2</sup>+0.9s+9)", "(s+0.3)(s+30)"), null],
+    [frac("10(s<sup>2</sup>+6s+9)", "(s+0.3)(s+30)"), "ζ = 1 turns the pair at ω = 3 into a double real zero: no notch and a gradual phase change."],
+    [frac("10(s<sup>2</sup>+0.9s+9)", "s(s+0.3)(s+30)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be −20 dB/dec, with phase starting near −90°."],
+    [frac("10(s<sup>2</sup>+0.9s+9)", "(s+0.3)<sup>2</sup>(s+30)"), "Double pole at ω = 0.3: the slope would change by −40 dB/dec there instead of −20."],
+    [frac("10(s<sup>2</sup>+0.9s+3)", "(s+0.3)(s+30)"), "Uses ω<sub>n</sub> where ω<sub>n</sub><sup>2</sup> belongs, so the notch would sit near ω ≈ 1.73 rad/s instead of 3."]
+  ],
+ },
+ {
+  name: 'Problem 14', diff: "Intermediate", w: [0.01, 100], mag: [-80, 60, 20], ph: [-30, 210, 30],
+  blocks: [{"type": "pow", "p": 2, "label": "s²"}, {"type": "gain", "K": 4, "label": "K = 4"}, {"type": "cplx", "sign": -1, "wn": 5, "z": 0.25, "label": "complex poles"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.01 to ω = 0.1 the magnitude goes from −68 dB to −28 dB: <b>+40 dB/decade</b>. The phase starts at <b>180°</b>.", what: "Two zeros at the origin: <b>s²</b> (a double differentiator).", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: +40 dB/dec and 180°.", marks: {"pts": [[0.01, -67.96], [0.1, -27.96]], "ppts": [[0.01, 179.94]]} },
+    { q: "Your origin blocks alone pass through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 1</b>: it reads <b>12 dB</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>12/20</sup> = <b>4</b>.", marks: {"pts": [[1, 12.04]], "vl": [1]} },
+    { q: "Look at the feature near ω ≈ 5. Is it a peak or a notch? How much does the slope change, and what does the phase do?", clue: "A rounded <b>peak</b> at ω ≈ 5. The slope changes from +40 to <b>0 dB/dec</b>, a change of −40, and the phase drops by about 180° around ω = 5.", what: "An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 5 rad/s.", read: "At ω<sub>n</sub> the exact curve is 46 dB. Removing the other blocks' contributions leaves <b>6 dB</b> for the pair alone. The pair alone contributes 1/(2ζ) there, so 1/(2ζ) = 10<sup>6/20</sup> ≈ 2 and <b>ζ ≈ 0.25</b>.", marks: {"vl": [5], "pts": [[5, 46.02]], "ppts": [[5, 90.0]]} }
+  ],
+  poly: frac("100s<sup>2</sup>", "(s<sup>2</sup>+2.5s+25)"),
+  choices: [
+    [frac("4s<sup>2</sup>", "(s<sup>2</sup>+2.5s+25)"), "This uses the Bode-form gain K = 4 in a polynomial-form expression, so the whole magnitude is 28 dB too low."],
+    [frac("100s<sup>2</sup>", "(s<sup>2</sup>+10s+25)"), "ζ = 1 turns the pair at ω = 5 into a double real pole: no peak and a gradual phase change."],
+    [frac("100s", "(s<sup>2</sup>+2.5s+25)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be +20 dB/dec, with phase starting near 90°."],
+    [frac("100s<sup>2</sup>", "(s<sup>2</sup>+2.5s+25)"), null],
+    [frac("100s<sup>2</sup>", "(s<sup>2</sup>+2.5s+5)"), "Uses ω<sub>n</sub> where ω<sub>n</sub><sup>2</sup> belongs, so the resonance would sit near ω ≈ 2.24 rad/s instead of 5."]
+  ],
+ },
+ {
+  name: 'Problem 15', diff: "Challenging", w: [0.01, 1000], mag: [-160, 40, 40], ph: [-315, 45, 45],
+  blocks: [{"type": "gain", "K": 2, "label": "K = 2"}, {"type": "cplx", "sign": -1, "wn": 1, "z": 0.1, "label": "complex poles"}, {"type": "real", "sign": 1, "w0": 10, "n": 1, "label": "zero @ 10"}, {"type": "cplx", "sign": -1, "wn": 30, "z": 0.05, "label": "complex poles"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope. There is more than one resonance.",
+  steps: [
+    { q: "At the far left the magnitude is flat. What level does it sit at, and where does the phase start?", clue: "The magnitude is flat at <b>6 dB</b> and the phase starts at <b>0°</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>6/20</sup> ≈ <b>2</b>.", marks: {"pts": [[0.01, 6.02]], "ppts": [[0.01, -0.06]]} },
+    { q: "Look at the feature near ω ≈ 1. Is it a peak or a notch? How much does the slope change, and what does the phase do?", clue: "A sharp <b>peak</b> at ω ≈ 1. The slope changes from 0 to <b>−40 dB/dec</b>, a change of −40, and the phase drops by about 180° over a narrow range.", what: "An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 1 rad/s.", read: "At ω<sub>n</sub> the exact curve is 20.1 dB. Removing the other blocks' contributions leaves <b>14 dB</b> for the pair alone. The pair alone contributes 1/(2ζ) there, so 1/(2ζ) = 10<sup>14/20</sup> ≈ 5 and <b>ζ ≈ 0.1</b>.", marks: {"vl": [1], "pts": [[1, 20.05]], "ppts": [[1, -84.48]]} },
+    { q: "What happens to the slope near ω ≈ 10? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 10</b> the slope changes from −40 to <b>−20 dB/dec</b>, a change of +20. The corner is smooth, with no peak or notch, and the phase rises by about 90° in total.", what: "A real zero at ω = 10, (s/10 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 10 rad/s</b>. The exact curve there is −29.9 dB, about 3 dB above the −34 dB asymptote corner.", marks: {"vl": [10], "pts": [[10, -29.87]]} },
+    { q: "Look at the feature near ω ≈ 30. Is it a peak or a notch? How much does the slope change, and what does the phase do?", clue: "A sharp <b>peak</b> at ω ≈ 30. The slope changes from −20 to <b>−60 dB/dec</b>, a change of −40, and the phase drops by about 180° over a narrow range.", what: "An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 30 rad/s.", read: "At ω<sub>n</sub> the exact curve is −23.1 dB. Removing the other blocks' contributions leaves <b>20 dB</b> for the pair alone. The pair alone contributes 1/(2ζ) there, so 1/(2ζ) = 10<sup>20/20</sup> ≈ 10 and <b>ζ ≈ 0.05</b>.", marks: {"vl": [30], "pts": [[30, -23.05]], "ppts": [[30, -198.05]]} }
+  ],
+  poly: frac("180(s+10)", "(s<sup>2</sup>+0.2s+1)(s<sup>2</sup>+3s+900)"),
+  choices: [
+    [frac("2(s+10)", "(s<sup>2</sup>+0.2s+1)(s<sup>2</sup>+3s+900)"), "This uses the Bode-form gain K = 2 in a polynomial-form expression, so the whole magnitude is 39 dB too low."],
+    [frac("180(s+10)", "(s<sup>2</sup>+0.2s+1)(s<sup>2</sup>+3s+900)"), null],
+    [frac("180(s+10)", "(s<sup>2</sup>+2s+1)(s<sup>2</sup>+3s+900)"), "ζ = 1 turns the pair at ω = 1 into a double real pole: no peak and a gradual phase change."],
+    [frac("180(s+10)", "s(s<sup>2</sup>+0.2s+1)(s<sup>2</sup>+3s+900)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be −20 dB/dec, with phase starting near −90°."],
+    [frac("180(s+10)<sup>2</sup>", "(s<sup>2</sup>+0.2s+1)(s<sup>2</sup>+3s+900)"), "Double zero at ω = 10: the slope would change by +40 dB/dec there instead of +20."]
+  ],
+ },
+ {
+  name: 'Problem 16', diff: "Intermediate", w: [0.001, 1000], mag: [-80, 120, 40], ph: [-210, -60, 30],
+  blocks: [{"type": "pow", "p": -1, "label": "1/s"}, {"type": "gain", "K": 100, "label": "K = 100"}, {"type": "real", "sign": -1, "w0": 0.1, "n": 1, "label": "pole @ 0.1"}, {"type": "real", "sign": 1, "w0": 1, "n": 1, "label": "zero @ 1"}, {"type": "real", "sign": -1, "w0": 50, "n": 1, "label": "pole @ 50"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.001 to ω = 0.01 the magnitude goes from 100 dB to 80 dB: <b>−20 dB/decade</b>. The phase starts at <b>−91°</b>.", what: "One pole at the origin: an <b>integrator 1/s</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: −20 dB/dec and −90°.", marks: {"pts": [[0.001, 100.0], [0.01, 79.96]], "ppts": [[0.001, -90.52]]} },
+    { q: "Your origin block alone passes through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 0.01</b>: it reads <b>80 dB</b>.", what: "A positive <b>gain K</b>.", read: "On that line |G| = |K|·ω<sup>-1</sup>, so |K| = 10<sup>80/20</sup> × 0.01<sup>1</sup> = <b>100</b>.", marks: {"pts": [[0.01, 80.0]], "vl": [0.01]} },
+    { q: "What happens to the slope near ω ≈ 0.1? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 0.1</b> the slope changes from −20 to <b>−40 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 0.1, 1/(s/0.1 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 0.1 rad/s</b>. The exact curve there is 57 dB, about 3 dB below the 60 dB asymptote corner.", marks: {"vl": [0.1], "pts": [[0.1, 57.03]]} },
+    { q: "What happens to the slope near ω ≈ 1? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 1</b> the slope changes from −40 to <b>−20 dB/dec</b>, a change of +20. The corner is smooth, with no peak or notch, and the phase rises by about 90° in total.", what: "A real zero at ω = 1, (s/1 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 1 rad/s</b>. The exact curve there is 23 dB, about 3 dB above the 20 dB asymptote corner.", marks: {"vl": [1], "pts": [[1, 22.97]]} },
+    { q: "What happens to the slope near ω ≈ 50? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 50</b> the slope changes from −20 to <b>−40 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 50, 1/(s/50 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 50 rad/s</b>. The exact curve there is −17 dB, about 3 dB below the −14 dB asymptote corner.", marks: {"vl": [50], "pts": [[50, -16.99]]} }
+  ],
+  poly: frac("500(s+1)", "s(s+0.1)(s+50)"),
+  choices: [
+    [frac("100(s+1)", "s(s+0.1)(s+50)"), "This uses the Bode-form gain K = 100 in a polynomial-form expression, so the whole magnitude is 14 dB too low."],
+    [frac("500(s+0.1)", "s(s+1)(s+50)"), "The zero at ω = 1 and the pole at ω = 0.1 are swapped, so the slope changes the wrong way at both frequencies."],
+    [frac("500(s+1)", "(s+0.1)(s+50)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be 0 dB/dec, with phase starting near 0°."],
+    [frac("500(s+1)", "s(s+0.1)<sup>2</sup>(s+50)"), "Double pole at ω = 0.1: the slope would change by −40 dB/dec there instead of −20."],
+    [frac("500(s+1)", "s(s+0.1)(s+50)"), null]
+  ],
+ },
+ {
+  name: 'Problem 17', diff: "Challenging", w: [0.01, 100], mag: [-60, 80, 20], ph: [-390, -240, 30],
+  blocks: [{"type": "pow", "p": -1, "label": "1/s"}, {"type": "gain", "K": -20, "label": "K = −20"}, {"type": "real", "sign": -1, "w0": 5, "n": 1, "label": "pole @ 5"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope. Pay close attention to the starting phase.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.01 to ω = 0.1 the magnitude goes from 66 dB to 46 dB: <b>−20 dB/decade</b>. The phase starts at <b>−270°</b>.", what: "One pole at the origin: an <b>integrator 1/s</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: −20 dB/dec and −90°. The extra −180° in the starting phase does not come from this block. It comes from a negative gain (next step).", marks: {"pts": [[0.01, 66.02], [0.1, 46.02]], "ppts": [[0.01, -270.11]]} },
+    { q: "Your origin block alone passes through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 1</b>: it reads <b>26 dB</b>. The phase starts at −270°, not −90°.", what: "A <b>negative gain K</b>. A sign flip adds −180° of phase and leaves the magnitude unchanged.", read: "|K| = 10<sup>26/20</sup> = <b>20</b>. The phase starts 180° lower than the origin block alone would give, so K = <b>−20</b>.", marks: {"pts": [[1, 26.02]], "vl": [1]} },
+    { q: "What happens to the slope near ω ≈ 5? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 5</b> the slope changes from −20 to <b>−40 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 5, 1/(s/5 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 5 rad/s</b>. The exact curve there is 9 dB, about 3 dB below the 12 dB asymptote corner.", marks: {"vl": [5], "pts": [[5, 9.03]]} }
+  ],
+  poly: frac("\u2212100", "s(s+5)"),
+  choices: [
+    [frac("\u221220", "s(s+5)"), "This uses the Bode-form gain K = −20 in a polynomial-form expression, so the whole magnitude is 14 dB too low."],
+    [frac("\u2212100", "(s+5)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be 0 dB/dec, with phase starting near −180°."],
+    [frac("\u2212100", "s(s+5)"), null],
+    [frac("\u2212100", "s(s+5)<sup>2</sup>"), "Double pole at ω = 5: the slope would change by −40 dB/dec there instead of −20."],
+    [frac("100", "s(s+5)"), "Positive gain: same magnitude, but the phase would start 180° higher."]
+  ],
+ },
+ {
+  name: 'Problem 18', diff: "Intermediate", w: [0.001, 1000], mag: [-50, 20, 10], ph: [-210, 90, 30],
+  blocks: [{"type": "gain", "K": 0.5, "label": "K = 0.5"}, {"type": "real", "sign": 1, "w0": 0.2, "n": 1, "label": "zero @ 0.2"}, {"type": "real", "sign": -1, "w0": 2, "n": 1, "label": "pole @ 2"}, {"type": "real", "sign": -1, "w0": 50, "n": 2, "label": "double pole @ 50"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "At the far left the magnitude is flat. What level does it sit at, and where does the phase start?", clue: "The magnitude is flat at <b>−6 dB</b> and the phase starts at <b>0°</b>.", what: "A positive <b>gain K</b>.", read: "|K| = 10<sup>−6/20</sup> ≈ <b>0.5</b>.", marks: {"pts": [[0.001, -6.02]], "ppts": [[0.001, 0.26]]} },
+    { q: "What happens to the slope near ω ≈ 0.2? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 0.2</b> the slope changes from 0 to <b>+20 dB/dec</b>, a change of +20. The corner is smooth, with no peak or notch, and the phase rises by about 90° in total.", what: "A real zero at ω = 0.2, (s/0.2 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 0.2 rad/s</b>. The exact curve there is −3.1 dB, about 3 dB above the −6 dB asymptote corner.", marks: {"vl": [0.2], "pts": [[0.2, -3.05]]} },
+    { q: "What happens to the slope near ω ≈ 2? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 2</b> the slope changes from +20 to <b>0 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 2, 1/(s/2 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 2 rad/s</b>. The exact curve there is 11 dB, about 3 dB below the 14 dB asymptote corner.", marks: {"vl": [2], "pts": [[2, 11.0]]} },
+    { q: "What happens to the slope near ω ≈ 50? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 50</b> the slope changes from 0 to <b>−40 dB/dec</b>, a change of −40. The corner is smooth, with no peak or notch, and the phase falls by about 180° in total.", what: "A double real pole at ω = 50, 1/(s/50 + 1)<sup>2</sup>. A change of 40 dB/dec with a smooth corner means two real factors, not a complex pair.", read: "The break frequency is where the asymptotes meet: <b>ω = 50 rad/s</b>. The exact curve there is 8 dB, about 6 dB below the 14 dB asymptote corner.", marks: {"vl": [50], "pts": [[50, 7.95]]} }
+  ],
+  poly: frac("12500(s+0.2)", "(s+2)(s+50)<sup>2</sup>"),
+  choices: [
+    [frac("12500(s+0.2)", "(s+2)(s+50)<sup>2</sup>"), null],
+    [frac("0.5(s+0.2)", "(s+2)(s+50)<sup>2</sup>"), "This uses the Bode-form gain K = 0.5 in a polynomial-form expression, so the whole magnitude is 88 dB too low."],
+    [frac("12500(s+2)", "(s+0.2)(s+50)<sup>2</sup>"), "The zero at ω = 0.2 and the pole at ω = 2 are swapped, so the slope changes the wrong way at both frequencies."],
+    [frac("12500(s+0.2)", "s(s+2)(s+50)<sup>2</sup>"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be −20 dB/dec, with phase starting near −90°."],
+    [frac("12500(s+0.2)", "(s+2)<sup>2</sup>(s+50)<sup>2</sup>"), "Double pole at ω = 2: the slope would change by −40 dB/dec there instead of −20."]
+  ],
+ },
+ {
+  name: 'Problem 19', diff: "Challenging", w: [0.01, 1000], mag: [-100, 20, 20], ph: [-315, 135, 45],
+  blocks: [{"type": "pow", "p": 1, "label": "s"}, {"type": "gain", "K": 10, "label": "K = 10"}, {"type": "real", "sign": -1, "w0": 1, "n": 2, "label": "double pole @ 1"}, {"type": "cplx", "sign": -1, "wn": 100, "z": 0.1, "label": "complex poles"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.01 to ω = 0.1 the magnitude goes from −20 dB to −0.1 dB: <b>+20 dB/decade</b>. The phase starts at <b>89°</b>.", what: "A zero at the origin: a <b>differentiator s</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: +20 dB/dec and 90°.", marks: {"pts": [[0.01, -20.0], [0.1, -0.09]], "ppts": [[0.01, 88.85]]} },
+    { q: "Your origin block alone passes through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 0.1</b>: it reads <b>0 dB</b>.", what: "A positive <b>gain K</b>.", read: "On that line |G| = |K|·ω<sup>1</sup>, so |K| = 10<sup>0/20</sup> × 0.1<sup>-1</sup> = <b>10</b>.", marks: {"pts": [[0.1, 0.0]], "vl": [0.1]} },
+    { q: "What happens to the slope near ω ≈ 1? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 1</b> the slope changes from +20 to <b>−20 dB/dec</b>, a change of −40. The corner is smooth, with no peak or notch, and the phase falls by about 180° in total.", what: "A double real pole at ω = 1, 1/(s/1 + 1)<sup>2</sup>. A change of 40 dB/dec with a smooth corner means two real factors, not a complex pair.", read: "The break frequency is where the asymptotes meet: <b>ω = 1 rad/s</b>. The exact curve there is 14 dB, about 6 dB below the 20 dB asymptote corner.", marks: {"vl": [1], "pts": [[1, 13.98]]} },
+    { q: "Look at the feature near ω ≈ 100. Is it a peak or a notch? How much does the slope change, and what does the phase do?", clue: "A sharp <b>peak</b> at ω ≈ 100. The slope changes from −20 to <b>−60 dB/dec</b>, a change of −40, and the phase drops by about 180° over a narrow range.", what: "An underdamped <b>complex-conjugate pole pair</b> with ω<sub>n</sub> = 100 rad/s.", read: "At ω<sub>n</sub> the exact curve is −6 dB. Removing the other blocks' contributions leaves <b>14 dB</b> for the pair alone. The pair alone contributes 1/(2ζ) there, so 1/(2ζ) = 10<sup>14/20</sup> ≈ 5 and <b>ζ ≈ 0.1</b>.", marks: {"vl": [100], "pts": [[100, -6.02]], "ppts": [[100, -178.85]]} }
+  ],
+  poly: frac("10<sup>5</sup>s", "(s+1)<sup>2</sup>(s<sup>2</sup>+20s+10000)"),
+  choices: [
+    [frac("10s", "(s+1)<sup>2</sup>(s<sup>2</sup>+20s+10000)"), "This uses the Bode-form gain K = 10 in a polynomial-form expression, so the whole magnitude is 80 dB too low."],
+    [frac("10<sup>5</sup>s", "(s+1)<sup>2</sup>(s<sup>2</sup>+200s+10000)"), "ζ = 1 turns the pair at ω = 100 into a double real pole: no peak and a gradual phase change."],
+    [frac("10<sup>5</sup>", "(s+1)<sup>2</sup>(s<sup>2</sup>+20s+10000)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be 0 dB/dec, with phase starting near 0°."],
+    [frac("10<sup>5</sup>s", "(s+1)<sup>2</sup>(s<sup>2</sup>+20s+10000)"), null],
+    [frac("10<sup>5</sup>s", "(s+1)(s<sup>2</sup>+20s+10000)"), "Single pole at ω = 1: the slope would change by −20 dB/dec there instead of −40."]
+  ],
+ },
+ {
+  name: 'Problem 20', diff: "Intermediate", w: [0.001, 1000], mag: [-20, 140, 20], ph: [-210, 0, 30],
+  blocks: [{"type": "pow", "p": -2, "label": "1/s²"}, {"type": "gain", "K": 2, "label": "K = 2"}, {"type": "real", "sign": 1, "w0": 0.5, "n": 2, "label": "double zero @ 0.5"}, {"type": "real", "sign": -1, "w0": 20, "n": 1, "label": "pole @ 20"}],
+  intro: "Start at the far left of both plots. The lowest-frequency behaviour tells you how many poles or zeros sit at the origin and fixes the gain. Then scan left to right and add one block at every change in slope.",
+  steps: [
+    { q: "Look at the far left. How fast does the magnitude change per decade, and where does the phase start?", clue: "From ω = 0.001 to ω = 0.01 the magnitude goes from 126 dB to 86 dB: <b>−40 dB/decade</b>. The phase starts at <b>−180°</b>.", what: "Two poles at the origin: a <b>double integrator 1/s²</b>.", read: "Each pole at the origin gives −20 dB/dec and −90°; each zero gives +20 dB/dec and +90°. Together: −40 dB/dec and −180°.", marks: {"pts": [[0.001, 126.02], [0.01, 86.02]], "ppts": [[0.001, -179.77]]} },
+    { q: "Your origin blocks alone pass through 0 dB at ω = 1. How far must the low-frequency line be shifted?", clue: "Extend the low-frequency straight line to <b>ω = 0.1</b>: it reads <b>46 dB</b>.", what: "A positive <b>gain K</b>.", read: "On that line |G| = |K|·ω<sup>-2</sup>, so |K| = 10<sup>46/20</sup> × 0.1<sup>2</sup> = <b>2</b>.", marks: {"pts": [[0.1, 46.02]], "vl": [0.1]} },
+    { q: "What happens to the slope near ω ≈ 0.5? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 0.5</b> the slope changes from −40 to <b>0 dB/dec</b>, a change of +40. The corner is smooth, with no peak or notch, and the phase rises by about 180° in total.", what: "A double real zero at ω = 0.5, (s/0.5 + 1)<sup>2</sup>. A change of 40 dB/dec with a smooth corner means two real factors, not a complex pair.", read: "The break frequency is where the asymptotes meet: <b>ω = 0.5 rad/s</b>. The exact curve there is 24.1 dB, about 6 dB above the 18.1 dB asymptote corner.", marks: {"vl": [0.5], "pts": [[0.5, 24.08]]} },
+    { q: "What happens to the slope near ω ≈ 20? How big is the change, and does the phase rise or fall?", clue: "Around <b>ω = 20</b> the slope changes from 0 to <b>−20 dB/dec</b>, a change of −20. The corner is smooth, with no peak or notch, and the phase falls by about 90° in total.", what: "A real pole at ω = 20, 1/(s/20 + 1).", read: "The break frequency is where the asymptotes meet: <b>ω = 20 rad/s</b>. The exact curve there is 15.1 dB, about 3 dB below the 18.1 dB asymptote corner.", marks: {"vl": [20], "pts": [[20, 15.06]]} }
+  ],
+  poly: frac("160(s+0.5)<sup>2</sup>", "s<sup>2</sup>(s+20)"),
+  choices: [
+    [frac("2(s+0.5)<sup>2</sup>", "s<sup>2</sup>(s+20)"), "This uses the Bode-form gain K = 2 in a polynomial-form expression, so the whole magnitude is 38 dB too low."],
+    [frac("160(s+0.5)<sup>2</sup>", "s<sup>2</sup>(s+20)"), null],
+    [frac("160(s+20)<sup>2</sup>", "s<sup>2</sup>(s+0.5)"), "The zero at ω = 0.5 and the pole at ω = 20 are swapped, so the slope changes the wrong way at both frequencies."],
+    [frac("160(s+0.5)<sup>2</sup>", "s(s+20)"), "Wrong number of poles or zeros at the origin: the low-frequency slope would be −20 dB/dec, with phase starting near −90°."],
+    [frac("160(s+0.5)<sup>2</sup>", "s<sup>2</sup>(s+20)<sup>2</sup>"), "Double pole at ω = 20: the slope would change by −40 dB/dec there instead of −20."]
+  ],
+ },
+];
+const DIFF6 = ['Intermediate', 'Intermediate', 'Challenging', 'Intermediate', 'Challenging', 'Challenging'];
+PROBLEMS.forEach((P, i) => { P.answer = P.blocks.map(b => ({ ...b })); if (!P.diff) P.diff = DIFF6[i]; });
+
+// ---------- state ----------
+const KINDS = {
+  gain:  { name: 'Gain', sym: 'K' },
+  int:   { name: 'Integrator', sym: '1/s', mult: true },
+  diff:  { name: 'Differentiator', sym: 's', mult: true },
+  pole1: { name: 'First-order pole', sym: frac('1', 's/ω + 1'), mult: true },
+  zero1: { name: 'First-order zero', sym: 's/ω + 1', mult: true },
+  pole2: { name: 'Second-order poles', sym: frac('1', '(s/ω<sub>n</sub>)² + 2ζs/ω<sub>n</sub> + 1') },
+  zero2: { name: 'Second-order zeros', sym: '(s/ω<sub>n</sub>)² + 2ζs/ω<sub>n</sub> + 1' },
+};
+function kindOf(b) {
+  if (b.type === 'gain') return ['gain', 1];
+  if (b.type === 'pow') return [b.p < 0 ? 'int' : 'diff', Math.abs(b.p)];
+  if (b.type === 'real') return [b.sign < 0 ? 'pole1' : 'zero1', b.n || 1];
+  return [b.sign < 0 ? 'pole2' : 'zero2', 1];
+}
+function toBlock(c) {
+  switch (c.kind) {
+    case 'gain': return { type: 'gain', K: c.sgn * c.K };
+    case 'int': return { type: 'pow', p: -c.m };
+    case 'diff': return { type: 'pow', p: c.m };
+    case 'pole1': return { type: 'real', sign: -1, w0: c.w, n: c.m };
+    case 'zero1': return { type: 'real', sign: 1, w0: c.w, n: c.m };
+    case 'pole2': return { type: 'cplx', sign: -1, wn: c.w, z: c.z };
+    case 'zero2': return { type: 'cplx', sign: 1, wn: c.w, z: c.z };
+  }
+}
+const fresh = () => ({ placed: [], cand: null, fb: null, tt: 0, pt: 0, snap: null, picked: null, wrong: [], just: false, zx: {} });
+const HELP = { slider: 2, typeClue: 2, typeAnswer: 4, paramClue: 5, paramAnswer: 7 };
+const unlocked = () => G().pt >= HELP.slider;
+const clueOn = () => G().tt >= HELP.typeClue || G().pt >= HELP.paramClue;
+const answerOn = () => G().tt >= HELP.typeAnswer || G().pt >= HELP.paramAnswer;
+function candShown() { const g = G(); if (!g.cand) return null; return unlocked() ? toBlock(g.cand) : g.snap; }
+const eqBlocks = () => G().cand ? [...placedBlocks(), toBlock(G().cand)] : placedBlocks();
+const S = { pi: 0, step: 0, view: 'plot', hoverW: null, mode: 'menu', filter: 'All', G: PROBLEMS.map(fresh) };
+
+const $ = id => document.getElementById(id);
+const P = () => PROBLEMS[S.pi];
+const G = () => S.G[S.pi];
+const K = () => P().blocks.length;
+const allPlaced = () => G().placed.length === K();
+const buildStep = () => G().placed.length + 1;                     // step index of the block being built
+const isBuild = () => !allPlaced() && S.step === buildStep();
+const isReview = () => S.step >= 1 && S.step <= G().placed.length;
+const isCheck = () => allPlaced() && S.step === K() + 1;
+const placedBlocks = (n = G().placed.length) => G().placed.slice(0, n).map(i => ({ ...P().answer[i] }));
+const nextDefault = () => { for (let i = 0; i < K(); i++) if (!G().placed.includes(i)) return i; return 0; };
+const explored = n => placedBlocks(n).map((b, i) => b.type === 'cplx' && G().zx[i] != null ? { ...b, z: G().zx[i] } : b);
+function activeBlocks() {
+  if (S.step === 0) return [];
+  if (isReview()) return explored(S.step);
+  if (isBuild() && candShown()) return [...placedBlocks(), candShown()];
+  return placedBlocks();
+}
+function currentBlock() {
+  if (isReview()) return explored(S.step)[S.step - 1];
+  if (isBuild() && candShown()) return candShown();
+  return null;
+}
+function currentMarks() {
+  if (isReview()) return P().steps[G().placed[S.step - 1]].marks || {};
+  if (isBuild() && G().fb && clueOn()) return P().steps[G().fb.target].marks || {};
+  return {};
+}
+function samples() {
+  const [lo, hi] = P().w, n = 1400, a = LG(lo), b = LG(hi), ws = new Float64Array(n);
+  for (let i = 0; i < n; i++) ws[i] = 10 ** (a + (b - a) * i / (n - 1));
+  return ws;
+}
+
+// ---------- chart ----------
+function niceRange(arr, minSpan) {
+  let lo = Infinity, hi = -Infinity; for (const v of arr) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  const span = Math.max(hi - lo, minSpan), step = [1, 2, 5, 10, 15, 20, 30, 45, 60, 90].find(s => span / s <= 7) || 90;
+  const mid = (lo + hi) / 2; lo = Math.floor((mid - span / 2) / step) * step; hi = Math.ceil((mid + span / 2) / step) * step;
+  if (hi === lo) hi = lo + step; return [lo, hi, step];
+}
+function chart(svg, cfg) {
+  const W = svg.clientWidth || 600, H = +svg.getAttribute('height'), m = { l: 46, r: 12, t: 10, b: 24 };
+  const pw = W - m.l - m.r, ph = H - m.t - m.b, [x0, x1] = cfg.x.map(LG), [y0, y1, ys] = cfg.y;
+  const X = w => m.l + (LG(w) - x0) / (x1 - x0) * pw, Y = v => m.t + (y1 - v) / (y1 - y0) * ph;
+  let g = `<defs><clipPath id="cp-${svg.id}"><rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+  g += `<rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" fill="var(--surface)" stroke="var(--grid-major)"/>`;
+  for (let d = Math.floor(x0); d <= Math.ceil(x1); d++) for (let k = 1; k <= 9; k++) {
+    const w = k * 10 ** d; if (LG(w) < x0 - 1e-9 || LG(w) > x1 + 1e-9) continue;
+    g += `<line x1="${X(w)}" x2="${X(w)}" y1="${m.t}" y2="${m.t + ph}" stroke="${k === 1 ? 'var(--grid-major)' : 'var(--grid)'}" fill="none"/>`;
+    if (k === 1) g += `<text x="${X(w)}" y="${H - 6}" text-anchor="middle">10${sup(d)}</text>`;
+  }
+  for (let v = y0; v <= y1 + 1e-9; v += ys) {
+    g += `<line x1="${m.l}" x2="${m.l + pw}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v === 0 ? 'var(--grid-major)' : 'var(--grid)'}" fill="none"/>`;
+    g += `<text x="${m.l - 6}" y="${Y(v) + 4}" text-anchor="end">${fmt(v)}</text>`;
+  }
+  g += `<g clip-path="url(#cp-${svg.id})">`;
+  for (const v of cfg.vl || []) g += `<line x1="${X(v)}" x2="${X(v)}" y1="${m.t}" y2="${m.t + ph}" stroke="var(--mark)" stroke-dasharray="3 3" fill="none"/>`;
+  for (const s of cfg.series) {
+    let d = '', ws = cfg.ws;
+    for (let i = 0; i < ws.length; i++) {
+      const yv = Math.max(y0 - 1e4, Math.min(y1 + 1e4, s.y[i]));
+      d += (i ? 'L' : 'M') + X(ws[i]).toFixed(1) + ' ' + Y(yv).toFixed(1);
+    }
+    g += `<path d="${d}" fill="none" stroke="${s.c}" stroke-width="${s.w}" ${s.dash ? `stroke-dasharray="${s.dash}"` : ''} stroke-linejoin="round" ${s.op ? `opacity="${s.op}"` : ''}/>`;
+  }
+  for (const [w, v] of cfg.pts || []) g += `<circle cx="${X(w)}" cy="${Y(v)}" r="5" fill="var(--surface)" stroke="var(--mark)" stroke-width="2"/>`;
+  g += `</g><g class="xh"></g>`;
+  svg.innerHTML = g;
+  svg._map = { X, Y, m, pw, ph, x0, x1, H };
+}
+const sup = d => String(d).split('').map(c => '⁰¹²³⁴⁵⁶⁷⁸⁹'['0123456789'.indexOf(c)] || (c === '-' ? '⁻' : c)).join('');
+
+let cache = null;
+function render() {
+  const p = P(), ws = samples(), meas = response(p.answer, ws), act = activeBlocks(), rec = response(act, ws);
+  const cb = currentBlock(), blk = cb ? response([cb], ws) : null, marks = currentMarks();
+  const show = { r: $('tRecon').checked, a: $('tAsym').checked, b: $('tBlock').checked };
+  cache = { ws, meas, rec, blk };
+  if (S.view === 'plot') {
+    const sm = [{ y: meas.m, c: 'var(--measured)', w: 5, op: .75 }], sp = [{ y: meas.p, c: 'var(--measured)', w: 5, op: .75 }];
+    if (blk && show.b) { sm.push({ y: blk.m, c: 'var(--block)', w: 1.6 }); sp.push({ y: blk.p, c: 'var(--block)', w: 1.6 }); }
+    if (act.length && show.a) { sm.push({ y: rec.am, c: 'var(--asym)', w: 1.3, dash: '6 4' }); sp.push({ y: rec.ap, c: 'var(--asym)', w: 1.3, dash: '6 4' }); }
+    if (act.length && show.r) { sm.push({ y: rec.m, c: 'var(--recon)', w: 2.2 }); sp.push({ y: rec.p, c: 'var(--recon)', w: 2.2 }); }
+    chart($('cMag'), { ws, x: p.w, y: p.mag, series: sm, vl: marks.vl, pts: marks.pts });
+    chart($('cPh'), { ws, x: p.w, y: p.ph, series: sp, vl: marks.vl, pts: marks.ppts });
+    $('magTitle').textContent = 'Magnitude  |G(jω)|  [dB]'; $('phTitle').textContent = 'Phase  ∠G(jω)  [deg]';
+  } else {
+    const dm = meas.m.map((v, i) => v - rec.m[i]), dp = meas.p.map((v, i) => v - rec.p[i]);
+    chart($('cMag'), { ws, x: p.w, y: niceRange(dm, 20), series: [{ y: dm, c: 'var(--block)', w: 2.2 }], vl: marks.vl });
+    chart($('cPh'), { ws, x: p.w, y: niceRange(dp, 60), series: [{ y: dp, c: 'var(--block)', w: 2.2 }], vl: marks.vl });
+    $('magTitle').textContent = 'Still to explain: measured − reconstruction  [dB]';
+    $('phTitle').textContent = 'Still to explain: measured − reconstruction  [deg]';
+  }
+  drawHover();
+}
+function drawHover() {
+  const w = S.hoverW;
+  for (const id of ['cMag', 'cPh']) {
+    const svg = $(id), g = svg.querySelector('.xh'), M = svg._map; if (!g || !M) continue;
+    g.innerHTML = w ? `<line x1="${M.X(w)}" x2="${M.X(w)}" y1="${M.m.t}" y2="${M.m.t + M.ph}" stroke="var(--fg)" stroke-width="1" opacity=".5" fill="none"/>` : '';
+  }
+  if (!w || !cache) return;
+  const { ws, meas, rec } = cache; let i = 0, best = Infinity;
+  for (let j = 0; j < ws.length; j++) { const d = Math.abs(LG(ws[j]) - LG(w)); if (d < best) { best = d; i = j; } }
+  const hasRec = activeBlocks().length > 0;
+  $('readout').innerHTML = `ω = <b>${fmt(ws[i])}</b> rad/s · measured <b>${meas.m[i].toFixed(1)} dB</b>, <b>${meas.p[i].toFixed(1)}°</b>` +
+    (hasRec ? ` · reconstruction <b>${rec.m[i].toFixed(1)} dB</b>, <b>${rec.p[i].toFixed(1)}°</b>` : '');
+}
+function onPointer(e) {
+  const svg = e.currentTarget, M = svg._map; if (!M) return;
+  const r = svg.getBoundingClientRect(), x = e.clientX - r.left;
+  if (x < M.m.l || x > M.m.l + M.pw) return;
+  S.hoverW = 10 ** (M.x0 + (x - M.m.l) / M.pw * (M.x1 - M.x0)); drawHover();
+}
+['cMag', 'cPh'].forEach(id => { $(id).addEventListener('pointermove', onPointer); $(id).addEventListener('pointerdown', onPointer); });
+
+// ---------- notes panel ----------
+function mismatch() {
+  const { meas, rec } = cache; let a = 0, b = 0;
+  for (let i = 0; i < meas.m.length; i++) { a = Math.max(a, Math.abs(meas.m[i] - rec.m[i])); b = Math.max(b, Math.abs(meas.p[i] - rec.p[i])); }
+  return [a, b];
+}
+function newCand(kind) {
+  const [lo, hi] = P().w, mid = 10 ** ((LG(lo) + LG(hi)) / 2), w = lo <= 1 && 1 <= hi ? 1 : mid;
+  return { kind, m: 1, K: 1, sgn: 1, w, z: 0.5, zc: { method: 'amp', wr: null, meas: '', rows: {} } };
+}
+// ----- grading -----
+function grade() {
+  const g = G(), c = g.cand, ans = P().answer, un = [...Array(K()).keys()].filter(i => !g.placed.includes(i));
+  const same = un.filter(i => kindOf(ans[i])[0] === c.kind);
+  const name = KINDS[c.kind].name.toLowerCase();
+  if (!same.length) return { kind: 'bad', target: nextDefault(), msg: `Not this block: the ${name} you chose does not explain the next feature of the plot.` };
+  const dist = i => { const a = ans[i]; return a.type === 'real' ? Math.abs(LG(c.w / a.w0)) : a.type === 'cplx' ? Math.abs(LG(c.w / a.wn)) : 0; };
+  const t = same.sort((x, y) => dist(x) - dist(y))[0], a = ans[t], [, m] = kindOf(a);
+  if (KINDS[c.kind].mult && c.m !== m)
+    return { kind: 'bad', target: t, msg: `Right kind of block, but the order is wrong. Compare how much the slope changes: each first-order factor (or s) changes it by 20 dB/dec.` };
+  const off = [];
+  if (a.type === 'gain') { if (Math.sign(a.K) !== c.sgn) off.push('sign of the gain'); if (Math.abs(20 * LG(Math.abs(a.K) / c.K)) > 2) off.push('gain value'); }
+  if (a.type === 'real' && Math.abs(LG(c.w / a.w0)) > 0.1) off.push('break frequency');
+  if (a.type === 'cplx') { if (Math.abs(LG(c.w / a.wn)) > 0.1) off.push('natural frequency ω<sub>n</sub>'); if (Math.abs(c.z - a.z) > Math.max(0.03, 0.3 * a.z)) off.push('damping ratio ζ (recheck your worksheet)'); }
+  if (off.length) return { kind: 'warn', target: t, msg: `Right block. Now tune it: the ${off.join(' and the ')} ${off.length > 1 ? 'are' : 'is'} still off.` };
+  return { kind: 'ok', target: t };
+}
+function accept(t) {
+  const g = G(); g.placed.push(t); g.cand = null; g.fb = null; g.tt = 0; g.pt = 0; g.snap = null; g.just = true; S.step = g.placed.length; update();
+}
+// ----- parameter controls -----
+function ctlRange(key, lab, kind, lo, hi, v) {
+  if (!unlocked()) return `<div class="sl nos"><label for="n-${key}">${lab}</label><input class="num" type="number" id="n-${key}" data-k="${key}" data-lo="${lo}" data-hi="${hi}" value="${+v.toPrecision(3)}" step="any"></div>`;
+  const pos = kind === 'log' ? (LG(v) - LG(lo)) / (LG(hi) - LG(lo)) * 1000 : (v - lo) / (hi - lo) * 1000;
+  return `<div class="sl"><label for="r-${key}">${lab}</label><input type="range" id="r-${key}" min="0" max="1000" value="${Math.round(pos)}" data-k="${key}" data-kind="${kind}" data-lo="${lo}" data-hi="${hi}">
+    <input class="num" type="number" id="n-${key}" data-k="${key}" data-lo="${lo}" data-hi="${hi}" value="${+v.toPrecision(3)}" step="any" aria-label="${lab} value"></div>`;
+}
+function controls() {
+  const c = G().cand, [lo, hi] = P().w, k = KINDS[c.kind];
+  let h = '';
+  if (c.kind === 'gain') h += `<div class="sl"><span>Sign</span><div class="seg small">${[1, -1].map(v => `<button data-sgn="${v}" aria-pressed="${c.sgn === v}">${v > 0 ? '+' : '−'}</button>`).join('')}</div><span></span></div>`
+    + ctlRange('K', '|K|', 'log', 0.01, 1e5, c.K);
+  if (k.mult) h += `<div class="sl"><span>Order</span><div class="seg small">${[1, 2].map(v => `<button data-m="${v}" aria-pressed="${c.m === v}">${v === 1 ? 'single' : 'double'}</button>`).join('')}</div><span></span></div>`;
+  if (['pole1', 'zero1'].includes(c.kind)) h += ctlRange('w', 'ω', 'log', lo, hi, c.w);
+  if (['pole2', 'zero2'].includes(c.kind)) h += ctlRange('w', 'ω<sub>n</sub>', 'log', lo, hi, c.w) + zcalcHTML();
+  if (['int', 'diff'].includes(c.kind) && !k.mult) h += '<p class="hint">No parameters to tune.</p>';
+  return h;
+}
+// ----- damping-ratio worksheet -----
+const ZF = {
+  amp:  { pole: 'ζ = 1 / (2·10<sup>A/20</sup>)', zero: 'ζ = 10<sup>A/20</sup> / 2' },
+  peak: { pole: 'M<sub>r</sub> = 10<sup>A/20</sup>,  ζ = √[ (1 − √(1 − 1/M<sub>r</sub><sup>2</sup>)) / 2 ]',
+          zero: 'M<sub>r</sub> = 10<sup>−A/20</sup>,  ζ = √[ (1 − √(1 − 1/M<sub>r</sub><sup>2</sup>)) / 2 ]' },
+};
+const HINT = b => b.type === 'gain' ? '20·log₁₀|K|' : b.type === 'pow' ? `${b.p > 0 ? '+' : '−'}${20 * Math.abs(b.p)}·log₁₀ω` :
+  b.type === 'real' ? `${b.sign > 0 ? '+' : '−'}${(b.n || 1) * 10}·log₁₀(1 + (ω/${fmt(b.w0)})²)` :
+  `${b.sign > 0 ? '+' : '−'}20·log₁₀|1 − (ω/ω<sub>n</sub>)² + j2ζω/ω<sub>n</sub>|`;
+const zStar = c => c.zc.method === 'amp' ? c.w : (c.zc.wr || c.w);
+function zcalcHTML() {
+  const c = G().cand, zc = c.zc, pz = c.kind === 'pole2' ? 'pole' : 'zero', ws = zStar(c);
+  const others = placedBlocks();
+  const rows = others.map((b, i) => `<tr><td>− ${P().answer[G().placed[i]].label}<div class="hint">${HINT(b)}</div></td>
+      <td><input class="num zrow" type="number" step="any" id="zr-${i}" data-i="${i}" value="${zc.rows[i] ?? ''}" aria-label="Contribution of ${P().answer[G().placed[i]].label} in dB"></td><td class="ok" id="zk-${i}"></td></tr>`).join('');
+  return `<div class="zcalc">
+    <div class="zhead"><span>ζ from the plot</span><div class="seg small">
+      <button data-zm="amp" aria-pressed="${zc.method === 'amp'}">Amplification at ω<sub>n</sub></button>
+      <button data-zm="peak" aria-pressed="${zc.method === 'peak'}">Resonant ${pz === 'pole' ? 'peak' : 'notch'}</button></div></div>
+    <div class="formula">${ZF[zc.method][pz]}</div>
+    <p class="hint">A = measured |G(jω*)| − contributions of all other blocks at ω*.</p>
+    <div class="zstar">${zc.method === 'amp'
+      ? `<span>Evaluate at ω* = ω<sub>n</sub> = <b class="mono" id="zws">${fmt(ws)}</b> rad/s <span class="hint">(set ω<sub>n</sub> first)</span></span>`
+      : `<label for="zwr">Evaluate at ω* = ω<sub>r</sub> (where the ${pz === 'pole' ? 'peak' : 'notch'} is)</label><input class="num" type="number" step="any" id="zwr" value="${+ws.toPrecision(3)}">`}</div>
+    <div class="tablewrap"><table class="ztab"><thead><tr><th>Contribution at <span style="text-transform:none">ω*</span></th><th>dB</th><th></th></tr></thead><tbody>
+      <tr><td>Measured |G(jω*)|<div class="hint"><button class="link" id="zread">Read from plot</button></div></td>
+        <td><input class="num" type="number" step="any" id="zmeas" value="${zc.meas}" aria-label="Measured magnitude in dB"></td><td class="ok" id="zk-m"></td></tr>
+      ${rows}
+      <tr><td>− Blocks not placed yet<div class="hint">taken as ≈ 0 dB here</div></td><td class="mono">0</td><td></td></tr>
+      <tr class="tot"><td>= A, the ${pz} pair alone</td><td class="mono" id="zA">—</td><td></td></tr>
+    </tbody></table></div>
+    <div class="zres"><span id="zout">Fill in every row to compute ζ.</span><button class="btn small" id="zuse" disabled>Use this ζ</button></div>
+    <div class="hint">ζ in your block now: <b class="mono" id="zcur">${fmt(c.z)}</b></div>
+  </div>`;
+}
+let zVal = null;
+function updateCalc() {
+  const c = G().cand; if (!c || !c.zc || !$('zA')) return;
+  const zc = c.zc, ws = zStar(c), pz = c.kind === 'pole2' ? 'pole' : 'zero', others = placedBlocks();
+  if ($('zws')) $('zws').textContent = fmt(ws);
+  const truthM = response(P().answer, [ws]).m[0];
+  const mark = (id, val, truth, tol) => { const e = $(id); if (!e) return; if (!unlocked()) { e.textContent = ''; e.className = 'ok'; return; } e.textContent = val === '' ? '' : Math.abs(+val - truth) <= tol ? '✓' : '✗'; e.className = 'ok ' + (val === '' ? '' : Math.abs(+val - truth) <= tol ? 'y' : 'n'); };
+  mark('zk-m', zc.meas, truthM, 1);
+  let sum = 0, missing = zc.meas === '';
+  others.forEach((b, i) => { const v = zc.rows[i] ?? ''; mark('zk-' + i, v, evalBlock(b, ws)[0], 1); if (v === '') missing = true; else sum += +v; });
+  zVal = null;
+  if (missing) { $('zA').textContent = '—'; $('zout').textContent = 'Fill in every row to compute ζ.'; $('zuse').disabled = true; return; }
+  const A = +zc.meas - sum; $('zA').textContent = A.toFixed(1);
+  let z = null, msg = '';
+  const Af = A.toFixed(1), r3 = x => +x.toPrecision(3);
+  let work = '';
+  if (zc.method === 'amp') {
+    const L = 10 ** (A / 20);
+    z = pz === 'pole' ? 1 / (2 * L) : L / 2;
+    work = pz === 'pole' ? `ζ = 1 / (2·10<sup>${Af}/20</sup>) = 1 / (2·${r3(L)}) = <b>${r3(z)}</b>` : `ζ = 10<sup>${Af}/20</sup> / 2 = ${r3(L)} / 2 = <b>${r3(z)}</b>`;
+  } else {
+    const M = pz === 'pole' ? 10 ** (A / 20) : 10 ** (-A / 20);
+    if (M <= 1) msg = pz === 'pole' ? 'No peak above 0 dB: this method needs ζ < 0.707.' : 'No dip below 0 dB: this method needs ζ < 0.707.';
+    else { z = Math.sqrt((1 - Math.sqrt(1 - 1 / (M * M))) / 2);
+      work = `M<sub>r</sub> = 10<sup>${pz === 'pole' ? '' : '−'}${Af}/20</sup> = ${r3(M)},  ζ = √[ (1 − √(1 − 1/${r3(M)}<sup>2</sup>)) / 2 ] = <b>${r3(z)}</b>`; }
+  }
+  if (z !== null && (z <= 0 || z > 1.5)) { msg = `That gives ζ = ${fmt(z)}, which is out of range. Check the entries.`; z = null; }
+  zVal = z;
+  $('zout').innerHTML = z !== null ? `A = ${Af} dB<br>${work}` : msg;
+  $('zuse').disabled = z === null;
+}
+function bindCalc() {
+  const g = G(), c = g.cand; if (!c || !c.zc || !$('zA')) return;
+  document.querySelectorAll('[data-zm]').forEach(b => b.onclick = () => { c.zc.method = b.dataset.zm; notes(); });
+  const zr = $('zwr'); if (zr) zr.onchange = () => { const v = parseFloat(zr.value); if (v > 0) c.zc.wr = v; updateCalc(); };
+  $('zmeas').oninput = e => { c.zc.meas = e.target.value; updateCalc(); };
+  $('zread').onclick = () => { c.zc.meas = String(+response(P().answer, [zStar(c)]).m[0].toFixed(1)); $('zmeas').value = c.zc.meas; updateCalc(); };
+  document.querySelectorAll('.zrow').forEach(inp => inp.oninput = () => { c.zc.rows[inp.dataset.i] = inp.value; updateCalc(); });
+  $('zuse').onclick = () => { if (zVal === null) return; c.z = Math.min(1, Math.max(0.005, zVal)); $('zcur').textContent = fmt(c.z); render(); const e = $('eqNow'); if (e) e.innerHTML = bodeForm(eqBlocks()); };
+  updateCalc();
+}
+function palette() {
+  const c = G().cand;
+  return `<div class="palette">${Object.entries(KINDS).map(([k, v]) =>
+    `<button class="pblock" data-kind="${k}" aria-pressed="${c && c.kind === k}"><span class="pname">${v.name}</span><span class="psym">${v.sym}</span></button>`).join('')}</div>`;
+}
+function exploreHTML(i, b) {
+  const z = G().zx[i] ?? b.z, pz = b.sign < 0 ? 'peak' : 'notch';
+  return `<div class="box"><div class="lbl">Explore: how <span style="text-transform:none">ζ</span> shapes the ${pz}</div>
+    <p class="hint">Your ζ is correct. Move the slider to see how damping changes the ${pz} height and the phase transition. The measured curve stays fixed.</p>
+    <div class="sl"><label for="r-zx">ζ</label><input type="range" id="r-zx" min="0" max="1000" value="${Math.round((z - 0.01) / 0.99 * 1000)}" data-i="${i}"><output id="o-zx" class="mono">${fmt(z)}</output></div>
+    <div class="formula" id="zx-info">${zInfo(b, z)}</div>
+    <button class="link" id="zx-reset">Reset to ζ = ${fmt(b.z)}</button></div>`;
+}
+function zInfo(b, z) {
+  if (z >= Math.SQRT1_2) return `ζ ≥ 0.707: no ${b.sign < 0 ? 'resonant peak' : 'notch'}.`;
+  const M = 1 / (2 * z * Math.sqrt(1 - z * z)), dB = 20 * LG(M), wr = b.wn * Math.sqrt(1 - 2 * z * z);
+  return b.sign < 0
+    ? `M<sub>r</sub> = 1/(2ζ√(1−ζ²)) = ${(+dB.toFixed(1))} dB at ω<sub>r</sub> = ω<sub>n</sub>√(1−2ζ²) = ${fmt(wr)} rad/s`
+    : `Notch depth 2ζ√(1−ζ²) = −${(+dB.toFixed(1))} dB at ω<sub>r</sub> = ω<sub>n</sub>√(1−2ζ²) = ${fmt(wr)} rad/s`;
+}
+const corrOf = () => P().choices.findIndex(c => !c[1]);
+function helpNote() {
+  const g = G(), notes = [];
+  if (g.fb.kind === 'warn') {
+    if (g.pt < HELP.slider) notes.push(`Sliders unlock after ${HELP.slider - g.pt} more ${HELP.slider - g.pt === 1 ? 'try' : 'tries'}.`);
+    else if (g.pt === HELP.slider) notes.push('Sliders with a live preview are now available.');
+    if (!clueOn() && g.pt >= HELP.slider) notes.push(`A clue appears after ${HELP.paramClue - g.pt} more.`);
+  } else if (!clueOn()) notes.push(`Look at the plot again. A clue appears after ${HELP.typeClue - g.tt} more wrong ${HELP.typeClue - g.tt === 1 ? 'choice' : 'choices'}.`);
+  return notes.length ? `<span class="hint">${notes.join(' ')}</span>` : '';
+}
+function notes() {
+  const p = P(), g = G(), s = S.step, k = K(), el = $('notes');
+  const back = `<button class="btn" id="prev" ${s === 0 ? 'disabled' : ''}>← Back</button>`;
+  let h = '';
+  if (s === 0) {
+    h = `<div><div class="eyebrow">${p.name} · Start</div><h2>Read the measured plot</h2></div>
+      <p>${p.intro}</p>
+      <div class="box"><div class="lbl">Method</div>
+        <p>1. Low-frequency slope and phase → poles or zeros at the origin.<br>2. Low-frequency level → gain K.<br>3. Each slope change → one block at that break frequency. ±20 dB/dec means a first-order pole or zero; ±40 dB/dec with a sharp peak or dip means a second-order pair.<br>4. Use the phase to tell poles from zeros and to confirm the count.</p></div>
+      <div class="box"><div class="lbl">How it works</div>
+        <p>At each step, pick a block, estimate its parameters from the plot and type them in, then press <b>Check this block</b>. Help unlocks gradually: after 2 misses on the right block you get sliders with a live preview, after 5 a clue, and after 7 the answer. Picking the wrong type of block gives a clue after 2 tries and the answer after 4.</p></div>
+      <p class="hint">Hover over the plots to read exact values. “What's left” shows the part of the plot that your blocks don't explain yet.</p>
+      <div class="nav">${back}<button class="btn primary" id="next">${g.placed.length ? 'Continue →' : 'Begin step 1 →'}</button></div>`;
+  } else if (isReview()) {
+    const t = g.placed[s - 1], st = p.steps[t], b = p.answer[t];
+    h = `<div><div class="eyebrow">${p.name} · Step ${s} of ${k}</div><h2>Block: ${b.label}</h2></div>
+      ${g.just && s === g.placed.length ? `<div class="fb good"><b>Correct.</b> The block is set to its exact value.</div>` : ''}
+      <div class="box"><div class="lbl">What the plot shows</div><p>${st.clue}</p></div>
+      <div class="box answer"><div class="lbl">The block</div><p>${st.what}</p><p>${st.read}</p></div>
+      ${b.type === 'cplx' ? exploreHTML(s - 1, b) : ''}
+      <div class="box"><div class="lbl">Reconstruction so far</div><div class="eq" id="eqRev">${bodeForm(activeBlocks())}</div></div>
+      <div class="nav">${back}<button class="btn primary" id="next">${s === k ? 'Check the result →' : s === g.placed.length ? 'Next block →' : 'Forward →'}</button></div>`;
+  } else if (isBuild()) {
+    const fb = g.fb, st = p.steps[fb ? fb.target : nextDefault()];
+    h = `<div><div class="eyebrow">${p.name} · Step ${s} of ${k}</div><h2>Which block comes next?</h2></div>
+      <div class="box"><div class="lbl">Look at the plot</div><p>${st.q}</p></div>
+      ${fb ? `<div class="fb ${fb.kind === 'warn' ? 'warn' : 'bad'}">${fb.msg} ${helpNote()}</div>` : ''}
+      ${fb && clueOn() ? `<div class="box"><div class="lbl">Clue</div><p>${st.clue}</p></div>` : ''}
+      <div class="box"><div class="lbl">1 · Pick a block</div>${palette()}</div>
+      ${g.cand ? `<div class="box"><div class="lbl">2 · Tune ${KINDS[g.cand.kind].name.toLowerCase()}</div>${controls()}</div>` : ''}
+      ${g.cand && !unlocked() ? `<p class="hint">${g.snap ? 'The orange curve shows the block you last checked.' : 'Estimate the values from the plot, then press Check. Your block is drawn on the plot after you check it.'}</p>` : ''}
+      <div class="box"><div class="lbl">Reconstruction so far</div><div class="eq" id="eqNow">${bodeForm(eqBlocks())}</div></div>
+      ${answerOn() ? `<button class="link" id="giveup">Show me the answer for this step</button>` : ''}
+      <div class="nav">${back}<button class="btn primary" id="checkB" ${g.cand ? '' : 'disabled'}>Check this block →</button></div>`;
+  } else {
+    const [dm, dp] = mismatch(), ok = dm < 0.5 && dp < 1;
+    const pk = g.picked, corr = p.choices.findIndex(c => !c[1]);
+    h = `<div><div class="eyebrow">${p.name} · Check</div><h2>Assemble and compare</h2></div>
+      <div class="box"><div class="lbl">Bode form (from your blocks)</div><div class="eq">${bodeForm(placedBlocks())}</div>
+        <p class="hint">Multiply out the Bode form: each (s/ω + 1) becomes (s + ω)/ω, and each ω and ω² moves into the gain. Then pick the matching choice.</p>
+        ${pk === corr ? `<div class="lbl" style="margin-top:6px">Polynomial form</div><div class="eq">G(s) = ${p.poly}</div>` : ''}</div>
+      <div class="status"><span class="dot" style="background:${ok ? 'var(--good)' : 'var(--bad)'}"></span>
+        <span>Largest mismatch with the measured plot: <b class="mono">${dm.toFixed(2)} dB</b>, <b class="mono">${dp.toFixed(1)}°</b>${ok ? ' — it matches.' : ''}</span></div>
+      <div class="box"><div class="lbl">Which choice is it?</div>
+        <div class="choices">${p.choices.map((c, i) => `<button class="choice ${pk === corr && i === corr ? 'right' : g.wrong.includes(i) ? 'wrong' : ''}" data-c="${i}"><span class="L">${'ABCDE'[i]}</span><span class="eq">G(s) = ${c[0]}</span></button>`).join('')}</div>
+        ${pk === null ? '<p class="hint">Pick one to check it.</p>' : pk === corr
+          ? `<p class="why good">Correct: (${'ABCDE'[corr]}) matches the blocks you reconstructed.</p>`
+          : `<p class="why bad">Not (${'ABCDE'[pk]}). ${p.choices[pk][1]} Try another choice.</p>`}
+        ${pk === corr ? `<details><summary class="hint" style="cursor:pointer">Why each wrong choice fails</summary><div class="why">${p.choices.map((c, i) => c[1] ? `<p>(${'ABCDE'[i]}) ${c[1]}</p>` : '').join('')}</div></details>` : ''}
+      </div>
+      <button class="link" id="restart">Start this problem over</button>
+      <div class="nav">${back}${S.pi < PROBLEMS.length - 1 ? `<button class="btn primary" id="nextP">Next problem →</button>` : ''}</div>`;
+  }
+  el.innerHTML = h;
+  const on = (id, f) => { const e = $(id); if (e) e.onclick = f; };
+  on('prev', () => go(S.step - 1));
+  on('next', () => { g.just = false; go(S.step + 1); });
+  on('nextP', () => setProblem(S.pi + 1));
+  on('restart', () => { S.G[S.pi] = fresh(); S.step = 0; update(); });
+  on('giveup', () => accept(g.fb ? g.fb.target : nextDefault()));
+  on('checkB', () => {
+    const r = grade();
+    if (r.kind === 'ok') return accept(r.target);
+    g.snap = toBlock(g.cand); if (r.kind === 'bad') g.tt++; else g.pt++;
+    g.fb = r; notes(); render();
+  });
+  el.querySelectorAll('.choice').forEach(b => b.onclick = () => { if (g.picked === corrOf()) return; const c = +b.dataset.c; g.picked = c; if (c !== corrOf() && !g.wrong.includes(c)) g.wrong.push(c); notes(); save(); });
+  el.querySelectorAll('.pblock').forEach(b => b.onclick = () => {
+    if (g.cand && g.cand.kind === b.dataset.kind) return;
+    g.cand = newCand(b.dataset.kind); g.snap = null; notes(); render();
+  });
+  el.querySelectorAll('[data-sgn]').forEach(b => b.onclick = () => { g.cand.sgn = +b.dataset.sgn; notes(); render(); });
+  el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { g.cand.m = +b.dataset.m; notes(); render(); });
+  const live = () => { render(); const e = $('eqNow'); if (e) e.innerHTML = bodeForm(eqBlocks()); updateCalc(); };
+  bindCalc();
+  const zx = $('r-zx');
+  if (zx) {
+    const i = +zx.dataset.i, b = P().answer[g.placed[i]];
+    zx.oninput = () => { const z = 0.01 + zx.value / 1000 * 0.99; g.zx[i] = z; $('o-zx').textContent = fmt(z); $('zx-info').innerHTML = zInfo(b, z); render(); $('eqRev').innerHTML = bodeForm(activeBlocks()); };
+    on('zx-reset', () => { delete g.zx[i]; notes(); render(); });
+  }
+  el.querySelectorAll('input[type=range][data-k]').forEach(inp => inp.oninput = () => {
+    const lo = +inp.dataset.lo, hi = +inp.dataset.hi, t = inp.value / 1000;
+    const v = inp.dataset.kind === 'log' ? 10 ** (LG(lo) + t * (LG(hi) - LG(lo))) : lo + t * (hi - lo);
+    g.cand[inp.dataset.k] = v; $('n-' + inp.dataset.k).value = +v.toPrecision(3); live();
+  });
+  el.querySelectorAll('input.num[data-k]').forEach(inp => inp.onchange = () => {
+    const lo = +inp.dataset.lo, hi = +inp.dataset.hi; let v = parseFloat(inp.value);
+    if (!(v > 0)) { inp.value = +g.cand[inp.dataset.k].toPrecision(3); return; }
+    v = Math.min(hi, Math.max(lo, v)); g.cand[inp.dataset.k] = v; inp.value = +v.toPrecision(3);
+    const r = $('r-' + inp.dataset.k), kind = r ? r.dataset.kind : 'log';
+    if (r) r.value = Math.round(kind === 'log' ? (LG(v) - LG(lo)) / (LG(hi) - LG(lo)) * 1000 : (v - lo) / (hi - lo) * 1000); live();
+  });
+}
+function stepper() {
+  const p = P(), g = G(), k = K(), n = g.placed.length;
+  const items = [{ s: 0, l: 'Start', n: '·', done: true }];
+  for (let i = 1; i <= k; i++) items.push({ s: i, l: i <= n ? p.answer[g.placed[i - 1]].label : 'Block ' + i, n: i, done: i <= n, can: i <= n + 1 });
+  items.push({ s: k + 1, l: 'Check', n: '✓', done: n === k && S.step === k + 1, can: n === k });
+  $('stepper').innerHTML = items.map(it => `<button class="chip ${it.done ? 'done' : ''} ${it.s === S.step ? 'cur' : ''}" data-s="${it.s}" ${it.s === 0 || it.can ? '' : 'disabled'} ${it.s === S.step ? 'aria-current="step"' : ''}><span class="n">${it.n}</span>${it.l}</button>`).join('');
+  $('stepper').querySelectorAll('.chip').forEach(c => c.onclick = () => go(+c.dataset.s));
+}
+function workbar() {
+  const p = P(); $('wname').textContent = p.name; $('wdiff').textContent = p.diff; $('wdiff').dataset.d = p.diff;
+  $('prevP').disabled = S.pi === 0; $('nextP2').disabled = S.pi === PROBLEMS.length - 1;
+}
+// ---------- menu ----------
+const DIFFS = ['All', 'Warm-up', 'Intermediate', 'Challenging'];
+function status(i) {
+  const g = S.G[i], k = PROBLEMS[i].blocks.length, corr = PROBLEMS[i].choices.findIndex(c => !c[1]);
+  if (g.picked === corr) return ['solved', 'Solved'];
+  if (g.placed.length === k) return ['built', 'Built · pick the answer'];
+  if (g.placed.length) return ['prog', `${g.placed.length} of ${k} blocks`];
+  return ['new', 'Not started'];
+}
+function thumb(P) {
+  const n = 90, [lo, hi] = P.w, ws = Array.from({ length: n }, (_, i) => 10 ** (LG(lo) + (LG(hi) - LG(lo)) * i / (n - 1)));
+  const m = response(P.answer, ws).m, [y0, y1] = P.mag, W = 200, H = 64;
+  const pts = ws.map((w, i) => `${(i / (n - 1) * W).toFixed(1)},${(H - 4 - (Math.max(y0, Math.min(y1, m[i])) - y0) / (y1 - y0) * (H - 8)).toFixed(1)}`).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" class="thumb" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--recon)" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}
+function menu() {
+  $('filters').innerHTML = DIFFS.map(d => `<button aria-pressed="${S.filter === d}" data-f="${d}">${d}</button>`).join('');
+  $('filters').querySelectorAll('button').forEach(b => b.onclick = () => { S.filter = b.dataset.f; menu(); });
+  const solved = PROBLEMS.filter((_, i) => status(i)[0] === 'solved').length;
+  $('progress').innerHTML = `<b>${solved}</b> of ${PROBLEMS.length} solved`;
+  $('grid').innerHTML = PROBLEMS.map((q, i) => {
+    if (S.filter !== 'All' && q.diff !== S.filter) return '';
+    const [st, lab] = status(i);
+    return `<button class="card" data-p="${i}"><div class="ctop"><span class="cnum">${i + 1}</span><span class="dchip" data-d="${q.diff}">${q.diff}</span></div>
+      ${thumb(q)}<div class="cfoot"><span class="sdot ${st}"></span>${lab}<span class="cblocks">${q.blocks.length} blocks</span></div></button>`;
+  }).join('');
+  $('grid').querySelectorAll('.card').forEach(c => c.onclick = () => setProblem(+c.dataset.p));
+}
+function showMenu() { S.mode = 'menu'; $('menu').hidden = false; $('work').hidden = true; menu(); save(); window.scrollTo(0, 0); }
+function save() { try { localStorage.setItem('bodeLab.v1', JSON.stringify({ G: S.G.map(g => ({ placed: g.placed, picked: g.picked, wrong: g.wrong })), filter: S.filter })); } catch (e) {} }
+function load() {
+  try { const d = JSON.parse(localStorage.getItem('bodeLab.v1') || 'null'); if (!d) return;
+    d.G.forEach((g, i) => { if (S.G[i] && Array.isArray(g.placed) && g.placed.every(x => x < PROBLEMS[i].blocks.length)) { S.G[i].placed = g.placed; S.G[i].picked = g.picked ?? null; S.G[i].wrong = Array.isArray(g.wrong) ? g.wrong : []; } });
+    if (DIFFS.includes(d.filter)) S.filter = d.filter; } catch (e) {}
+}
+function go(s) {
+  const n = G().placed.length, max = n === K() ? K() + 1 : n + 1;
+  if (s < 0 || s > max) return; S.step = s; update();
+}
+function setProblem(i) {
+  S.pi = i; S.mode = 'work'; $('menu').hidden = true; $('work').hidden = false;
+  const g = G(); S.step = g.placed.length === K() ? K() + 1 : g.placed.length ? g.placed.length + 1 : 0;
+  update(); window.scrollTo(0, 0);
+}
+function update() { workbar(); stepper(); render(); notes(); save(); }
+$('toMenu').onclick = showMenu;
+$('prevP').onclick = () => S.pi > 0 && setProblem(S.pi - 1);
+$('nextP2').onclick = () => S.pi < PROBLEMS.length - 1 && setProblem(S.pi + 1);
+
+['tRecon', 'tAsym', 'tBlock'].forEach(id => $(id).onchange = render);
+$('vPlot').onclick = () => { S.view = 'plot'; $('vPlot').setAttribute('aria-pressed', 'true'); $('vRes').setAttribute('aria-pressed', 'false'); render(); };
+$('vRes').onclick = () => { S.view = 'res'; $('vRes').setAttribute('aria-pressed', 'true'); $('vPlot').setAttribute('aria-pressed', 'false'); render(); };
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || S.mode !== 'work') return;
+  if (e.key === 'ArrowLeft') go(S.step - 1);
+  if (e.key === 'ArrowRight' && !isBuild()) { G().just = false; go(S.step + 1); }
+});
+let rt; new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(() => S.mode === 'work' && render(), 60); }).observe($('cMag'));
+load(); showMenu();
+</script>
+
+</body></html>
